@@ -1,6 +1,7 @@
 set (
     SOURCES
     "main.cpp"
+    "request.cpp"
 )
 
 add_executable(RadarWorker ${SOURCES})

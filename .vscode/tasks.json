@@ -9,6 +9,19 @@
                 "kind": "build",
                 "isDefault": true
             }
+        },
+        {
+            "label": "Run RadarWorker",
+            "type": "shell",
+            "command": "${workspaceFolder}/build/Ninja-Release-x64/RadarWorker/RadarWorker",
+            "group": {
+                "kind": "build",
+                "isDefault": true
+            },
+            "presentation": {
+                "reveal": "always",
+                "panel": "new"
+            }
         }
     ]
 }
