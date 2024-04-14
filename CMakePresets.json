@@ -15,8 +15,7 @@
           "CMAKE_BUILD_TYPE": "Release",
           "CMAKE_EXPORT_COMPILE_COMMANDS": "YES",
           "CMAKE_C_COMPILER": "/usr/bin/gcc",
-          "CMAKE_CXX_COMPILER": "/usr/bin/g++",
-          "OpenCV_DIR": "/usr/local/lib/cmake/opencv4"
+          "CMAKE_CXX_COMPILER": "/usr/bin/g++"
         }
       }
     ]

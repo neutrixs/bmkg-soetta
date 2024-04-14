@@ -1,6 +1,22 @@
+#include <cmath>
+#include <fstream>
+#include <ios>
 #include <iostream>
+#include <tuple>
+#ifdef _WIN32
+#include <windows.h>
 
-int main() {
-    std::cout << "Hello" << std::endl;
-    return 0;
-}
+#endif
+
+#ifdef linux
+#include <unistd.h>
+
+#endif
+
+#include <sstream>
+
+#include "img.hpp"
+#include "processor.hpp"
+#include "request.hpp"
+
+int main() { return 0; }
