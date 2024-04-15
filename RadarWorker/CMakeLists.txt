@@ -1,9 +1,9 @@
 set (
     SOURCES
     "main.cpp"
-    "request.cpp"
-    "processor.cpp"
-    "img.cpp"
+    "map.cpp"
+    "png.cpp"
+    "radar.cpp"
 )
 
 add_executable(RadarWorker ${SOURCES})

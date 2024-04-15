@@ -1,11 +1,11 @@
-#include "img.hpp"
+#include "png.hpp"
 
 #include <bitset>
 #include <iostream>
 
 #include "string"
 
-std::tuple<unsigned int, unsigned int> png::get_resolution(std::string& data) {
+std::array<unsigned int, 2> png::get_resolution(std::string& data) {
     std::string ihdr_start = data.substr(16);
 
     std::string width_part = ihdr_start.substr(0, 4);
@@ -19,5 +19,5 @@ std::tuple<unsigned int, unsigned int> png::get_resolution(std::string& data) {
         height |= static_cast<u_char>(height_part[pos]) << (shift * 8);
     }
 
-    return std::tuple<unsigned int, unsigned int>(width, height);
+    return std::array<unsigned int, 2>{width, height};
 }
