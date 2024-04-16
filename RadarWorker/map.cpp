@@ -48,7 +48,7 @@ cv::Mat map::Tiles::render() {
     for (int tiles_y = range_north_approx, dl_count = 1; tiles_y < range_south_approx; tiles_y++) {
         for (int tiles_x = range_west_approx; tiles_x < range_east_approx; tiles_x++, dl_count++) {
             std::string URL_SCHEME = OSM_TILES_BASE_URL + std::to_string(zoom_level) + "/" + std::to_string(tiles_x) + "/" +
-                                     std::to_string(tiles_y) + ".png";
+                std::to_string(tiles_y) + ".png";
 
             std::hash<std::string> hasher;
             size_t hash_value = hasher(URL_SCHEME);
@@ -79,18 +79,15 @@ cv::Mat map::Tiles::render() {
                 // fake headers to bypass the limitation
                 // this is enough
                 std::list<std::string> headers;
-                headers.push_back(
-                    "User-Agent: Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
-                    "AppleWebKit/537.36 (KHTML, like Gecko) Chrome/123.0.0.0 "
-                    "Safari/537.36");
+                headers.push_back("User-Agent: Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
+                                  "AppleWebKit/537.36 (KHTML, like Gecko) Chrome/123.0.0.0 "
+                                  "Safari/537.36");
                 headers.push_back("Referer: https://www.openstreetmap.org/");
-                headers.push_back(
-                    "Accept: "
-                    "image/avif,image/webp,image/apng, text/html,image/svg+xml,image/*,*/*;q=0.8");
+                headers.push_back("Accept: "
+                                  "image/avif,image/webp,image/apng, text/html,image/svg+xml,image/*,*/*;q=0.8");
                 headers.push_back("Accept-Encoding: gzip, deflate, br, zstd");
-                headers.push_back(
-                    "Sec-Ch-Ua: \"Google Chrome\";v=\"123\", \"Not:A-Brand\";v=\"8\", "
-                    "\"Chromium\";v=\"123\"");
+                headers.push_back("Sec-Ch-Ua: \"Google Chrome\";v=\"123\", \"Not:A-Brand\";v=\"8\", "
+                                  "\"Chromium\";v=\"123\"");
 
                 try {
                     curlpp::Easy req;
@@ -188,7 +185,7 @@ cv::Mat map::Tiles::render_with_overlay_radar(float map_brightness, float radar_
 }
 
 void map::Tiles::set_appropriate_zoom_level() {
-    for (int zl = 14; zl > 7; zl--) {
+    for (int zl = 14; zl > 0; zl--) {
         zoom_level = zl;
 
         std::array<double, 4> tiles_range = get_tiles_range();
@@ -209,7 +206,8 @@ void map::Tiles::set_appropriate_zoom_level() {
         int rows = range_south_approx - range_north_approx;
         int cols = range_east_approx - range_west_approx;
 
-        if (rows * cols < MAX_APPROPRIATE_TILES) break;
+        if (rows * cols < MAX_APPROPRIATE_TILES)
+            break;
     }
 }
 
@@ -249,18 +247,15 @@ std::array<double, 4> map::OSM_get_bounding_box(std::string place) {
     std::stringstream response;
 
     std::list<std::string> 👺👺👺👺👺;
-    👺👺👺👺👺.push_back(
-        "User-Agent: Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
-        "AppleWebKit/537.36 (KHTML, like Gecko) Chrome/123.0.0.0 "
-        "Safari/537.36");
+    👺👺👺👺👺.push_back("User-Agent: Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
+                         "AppleWebKit/537.36 (KHTML, like Gecko) Chrome/123.0.0.0 "
+                         "Safari/537.36");
     👺👺👺👺👺.push_back("Referer: https://www.openstreetmap.org/");
-    👺👺👺👺👺.push_back(
-        "Accept: "
-        "application/json,text/html,image/svg+xml,image/*,*/*;q=0.8");
+    👺👺👺👺👺.push_back("Accept: "
+                         "application/json,text/html,image/svg+xml,image/*,*/*;q=0.8");
     👺👺👺👺👺.push_back("Accept-Encoding: gzip, deflate, br, zstd");
-    👺👺👺👺👺.push_back(
-        "Sec-Ch-Ua: \"Google Chrome\";v=\"123\", \"Not:A-Brand\";v=\"8\", "
-        "\"Chromium\";v=\"123\"");
+    👺👺👺👺👺.push_back("Sec-Ch-Ua: \"Google Chrome\";v=\"123\", \"Not:A-Brand\";v=\"8\", "
+                         "\"Chromium\";v=\"123\"");
 
     try {
         curlpp::Easy req;
@@ -305,12 +300,14 @@ void map::overlayImage(cv::Mat *src, cv::Mat *overlay, const cv::Point &location
     for (int y = (location.y, 0); y < src->rows; ++y) {
         int fY = y - location.y;
 
-        if (fY >= overlay->rows) break;
+        if (fY >= overlay->rows)
+            break;
 
         for (int x = std::max(location.x, 0); x < src->cols; ++x) {
             int fX = x - location.x;
 
-            if (fX >= overlay->cols) break;
+            if (fX >= overlay->cols)
+                break;
 
             double opacity = ((double)overlay->data[fY * overlay->step + fX * overlay->channels() + 3]) / 255;
 

@@ -19,10 +19,8 @@ struct RadarAPICMAX {
 };
 
 struct RadarAPIDataVec {
-    // north, west
-    std::array<double, 2> overlay_tlc;
-    // south, east
-    std::array<double, 2> overlay_brc;
+    // north, west, south, east
+    std::array<double, 4> boundaries;
     std::string kota;
     std::string stasiun;
     std::string kode;
@@ -31,8 +29,7 @@ struct RadarAPIDataVec {
     RadarAPICMAX CMAX;
 
     RadarAPIDataVec() {
-        overlay_tlc = {0.0, 0.0};
-        overlay_brc = {0.0, 0.0};
+        boundaries = {0.0, 0.0, 0.0, 0.0};
         kota = "";
         stasiun = "";
         kode = "";
@@ -41,8 +38,10 @@ struct RadarAPIDataVec {
     }
 };
 
+bool is_overlapping(std::array<double, 4> x, std::array<double, 4> y);
+
 class Imagery {
-   public:
+  public:
     void set_boundaries(double y1, double x1, double y2, double x2) {
         boundaries[0] = y1;
         boundaries[1] = x1;
@@ -50,14 +49,18 @@ class Imagery {
         boundaries[3] = x2;
     }
     int zoom_level = 13;
+    // terrible quality, lots of interverence
+    // there is CGK nearby anyway
+    std::vector<std::string> exclude_radar = {"JAK"};
     cv::Mat render(int width, int height);
-    std::vector<radar::RadarAPIDataVec>& get_radar_datas();
-    radar::RadarAPIDataVec& get_closest();
+    std::vector<radar::RadarAPIDataVec> &get_radar_datas();
+    std::vector<radar::RadarAPIDataVec *> get_radars_in_range();
+    radar::RadarAPIDataVec &get_closest();
 
-   private:
+  private:
     std::array<double, 4> boundaries = {0.0, 0.0, 0.0, 0.0};
     std::vector<radar::RadarAPIDataVec> radar_datas;
 };
-}  // namespace radar
+} // namespace radar
 
 #endif
