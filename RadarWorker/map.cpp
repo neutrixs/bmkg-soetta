@@ -41,8 +41,7 @@ cv::Mat map::Tiles::render() {
 
     std::vector<std::string> tiles_images;
 
-    fs::path usr_tempdir = fs::temp_directory_path();
-    usr_tempdir.append("bmkg-rad");
+    fs::path usr_tempdir = fs::current_path() / ".cache";
     fs::create_directories(usr_tempdir);
 
     for (int tiles_y = range_north_approx, dl_count = 1; tiles_y < range_south_approx; tiles_y++) {
