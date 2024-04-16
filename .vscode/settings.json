@@ -73,6 +73,6 @@
         "ranges": "cpp",
         "valarray": "cpp"
     },
-    "C_Cpp.clang_format_fallbackStyle": "{ BasedOnStyle: Microsoft, IndentWidth: 4, ColumnLimit: 128, BreakBeforeBraces: Attach }",
+    "C_Cpp.clang_format_fallbackStyle": "{ BasedOnStyle: Microsoft, IndentWidth: 4, ColumnLimit: 128, BreakBeforeBraces: Attach, AlignAfterOpenBracket: DontAlign, AlignOperands: DontAlign }",
     "cmake.configureOnOpen": false
 }
