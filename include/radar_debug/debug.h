@@ -35,7 +35,7 @@ double mem_usage() {
     double resident_set = 0.0;
 
     mem_usage(vm_usage, resident_set);
-    return resident_set;
+    return vm_usage;
 }
 
 #endif
