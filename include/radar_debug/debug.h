@@ -6,7 +6,7 @@
 #include <string>
 #include <unistd.h>
 
-void mem_usage(double &vm_usage, double &resident_set) {
+void inline mem_usage(double &vm_usage, double &resident_set) {
     vm_usage = 0.0;
     resident_set = 0.0;
 
@@ -30,7 +30,7 @@ void mem_usage(double &vm_usage, double &resident_set) {
     }
 }
 
-double mem_usage() {
+double inline mem_usage() {
     double vm_usage = 0.0;
     double resident_set = 0.0;
 
