@@ -17,6 +17,19 @@
           "CMAKE_C_COMPILER": "/usr/bin/gcc",
           "CMAKE_CXX_COMPILER": "/usr/bin/g++"
         }
+      },
+      {
+        "name": "Ninja-Debug-x64",
+        "description": "Linux x64, Debug, Ninja",
+        "hidden": false,
+        "generator": "Ninja",
+        "binaryDir": "${sourceDir}/build/${presetName}",
+        "cacheVariables": {
+          "CMAKE_BUILD_TYPE": "Debug",
+          "CMAKE_EXPORT_COMPILE_COMMANDS": "YES",
+          "CMAKE_C_COMPILER": "/usr/bin/gcc",
+          "CMAKE_CXX_COMPILER": "/usr/bin/g++"
+        }
       }
     ]
   }

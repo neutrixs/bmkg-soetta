@@ -11,6 +11,14 @@
             }
         },
         {
+            "label": "build-debug",
+            "type": "shell",
+            "command": "cmake --preset Ninja-Debug-x64 && ninja -C build/Ninja-Debug-x64",
+            "group": {
+                "kind": "build"
+            }
+        },
+        {
             "label": "Run RadarWorker",
             "type": "shell",
             "command": "${workspaceFolder}/build/Ninja-Release-x64/RadarWorker/RadarWorker",
