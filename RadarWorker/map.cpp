@@ -134,6 +134,9 @@ cv::Mat map::Tiles::render() {
         }
     }
 
+    // tiles_images no longer used
+    tiles_images.clear();
+
     int crop_top = int(height * (tnorth - floor(tnorth)));
     int crop_left = int(width * (twest - floor(twest)));
     int crop_bottom = int(height * (ceil(tsouth) - tsouth));
@@ -142,14 +145,17 @@ cv::Mat map::Tiles::render() {
     int cropped_width = uncropped_canvas_width - crop_left - crop_right;
     int cropped_height = uncropped_canvas_height - crop_top - crop_bottom;
 
-    cv::Mat cropped_canvas;
-    cv::Mat cropped_inset(uncropped_canvas, cv::Rect(crop_left, crop_top, cropped_width, cropped_height));
-    cropped_inset.copyTo(cropped_canvas);
+    cv::Mat cropped_canvas(uncropped_canvas, cv::Rect(crop_left, crop_top, cropped_width, cropped_height));
 
     // turn cropped_canvas to 4 channels
     cv::Mat alpha(cropped_canvas.size(), CV_8UC1, cv::Scalar(255));
     cv::Mat cropped_canvas_alpha;
     std::vector<cv::Mat> channels = {cropped_canvas, alpha};
+
+    // cropped_canvas and alpha no longer used
+    cropped_canvas.release();
+    alpha.release();
+
     cv::merge(channels, cropped_canvas_alpha);
 
     return cropped_canvas_alpha;
@@ -177,10 +183,9 @@ cv::Mat map::Tiles::render_with_overlay_radar(float map_brightness, float radar_
     }
 
     map::overlayImage(&base_map, &radar_imagery, cv::Point(0, 0));
-    cv::Mat no_transparency;
-    cv::cvtColor(base_map, no_transparency, cv::COLOR_BGRA2BGR);
+    cv::cvtColor(base_map, base_map, cv::COLOR_BGRA2BGR);
 
-    return no_transparency;
+    return base_map;
 }
 
 void map::Tiles::set_appropriate_zoom_level() {
@@ -193,14 +198,6 @@ void map::Tiles::set_appropriate_zoom_level() {
         int range_west_approx = static_cast<int>(floor(tiles_range[1]));
         int range_south_approx = static_cast<int>(ceil(tiles_range[2]));
         int range_east_approx = static_cast<int>(ceil(tiles_range[3]));
-
-        std::array<double, 2> tstart = coord_to_tile(boundaries[0], boundaries[1], zoom_level);
-        std::array<double, 2> tend = coord_to_tile(boundaries[2], boundaries[3], zoom_level);
-
-        double tnorth = tstart[1];
-        double twest = tstart[0];
-        double tsouth = tend[1];
-        double teast = tend[0];
 
         int rows = range_south_approx - range_north_approx;
         int cols = range_east_approx - range_west_approx;

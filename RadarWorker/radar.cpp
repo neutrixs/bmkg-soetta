@@ -6,6 +6,7 @@
 #include <curlpp/cURLpp.hpp>
 #include <iostream>
 #include <nlohmann/json.hpp>
+#include <radar_debug/debug.h>
 
 #include "map.hpp"
 #include "png.hpp"
@@ -36,14 +37,14 @@ cv::Mat radar::Imagery::render(int width, int height) {
     cv::Mat container = cv::Mat::zeros(height, width, CV_8UC4);
 
     for (int i = 0; i < radars.size(); i++) {
-        auto radar_data = radars.at(i);
+        auto d = radars.at(i);
 
         curlpp::initialize();
         std::stringstream response;
 
         try {
             curlpp::Easy req;
-            req.setOpt(new curlpp::options::Url(radar_data->CMAX.file));
+            req.setOpt(new curlpp::options::Url(d->CMAX.file));
 
             curlpp::options::WriteStream write(&response);
             req.setOpt(write);
@@ -62,66 +63,88 @@ cv::Mat radar::Imagery::render(int width, int height) {
         int radar_width = resolution[0];
         int radar_height = resolution[1];
 
-        cv::Mat original_image = cv::imdecode(buffer, cv::IMREAD_UNCHANGED);
+        cv::Mat image = cv::imdecode(buffer, cv::IMREAD_UNCHANGED);
 
-        double original_cropn = (boundaries[0] - radar_data->boundaries[0]) /
-            (radar_data->boundaries[2] - radar_data->boundaries[0]) * radar_height;
-        int original_cropn_floor = floor(original_cropn);
+        // crop if necessary to fit the map (approximate, obviously larger than the accurate size)
+        // we will crop it later
+        // but, image_cropx is accurate
+        // and note the new boundaries of the radar
+        double image_cropleft = (boundaries[1] - d->boundaries[1]) / (d->boundaries[3] - d->boundaries[1]) * radar_width;
+        image_cropleft = std::max(0., image_cropleft);
+        int image_cropleft_floor = floor(image_cropleft);
 
-        double original_cropw =
-            (boundaries[1] - radar_data->boundaries[1]) / (radar_data->boundaries[3] - radar_data->boundaries[1]) * radar_width;
-        int original_cropw_floor = floor(original_cropw);
+        double image_cropright = (d->boundaries[3] - boundaries[3]) / (d->boundaries[3] - d->boundaries[1]) * radar_width;
+        image_cropright = std::max(0., image_cropright);
+        int image_cropright_floor = floor(image_cropright);
 
-        double original_crops = (boundaries[2] - radar_data->boundaries[2]) /
-            (radar_data->boundaries[0] - radar_data->boundaries[2]) * radar_height;
-        int original_crops_floor = floor(original_crops);
+        double image_croptop = (d->boundaries[0] - boundaries[0]) / (d->boundaries[0] - d->boundaries[2]) * radar_height;
+        image_croptop = std::max(0., image_croptop);
+        int image_croptop_floor = floor(image_croptop);
 
-        double original_crope =
-            (boundaries[3] - radar_data->boundaries[3]) / (radar_data->boundaries[1] - radar_data->boundaries[3]) * radar_width;
-        int original_crope_floor = floor(original_crope);
+        double image_cropbottom = (boundaries[2] - d->boundaries[2]) / (d->boundaries[0] - d->boundaries[2]) * radar_height;
+        image_cropbottom = std::max(0., image_cropbottom);
+        int image_cropbottom_floor = floor(image_cropbottom);
 
-        int temp_width = radar_width - original_cropw_floor - original_crope_floor;
-        int temp_height = radar_height - original_cropn_floor - original_crops_floor;
+        int image_cropwidth = radar_width - image_cropleft_floor - image_cropright_floor;
+        int image_cropheight = radar_height - image_croptop_floor - image_cropbottom_floor;
 
-        cv::Mat temp_cropped = cv::Mat::zeros(temp_height, temp_width, CV_8UC4);
+        // crop the image, not creating a copy
+        cv::Mat image_crop = image(cv::Rect(image_cropleft_floor, image_croptop_floor, image_cropwidth, image_cropheight));
+        image_crop.copyTo(image);
 
-        auto inset_m_x_pos = abs(std::min(0, original_cropw_floor));
-        auto inset_m_y_pos = abs(std::min(0, original_cropn_floor));
-        auto inset_mr_x_width = original_cropw_floor >= 0 ? std::min(temp_width, temp_width + original_crope_floor)
-                                                          : std::min(radar_width, radar_width - original_crope_floor);
-        auto inset_mr_y_width = original_cropn_floor >= 0 ? std::min(temp_height, temp_height + original_crops_floor)
-                                                          : std::min(radar_height, radar_height - original_crops_floor);
+        std::array<double, 4> image_cropbounds = {
+            d->boundaries[0] - (d->boundaries[0] - d->boundaries[2]) * image_croptop / radar_height,
+            d->boundaries[1] + (d->boundaries[3] - d->boundaries[1]) * image_cropleft / radar_width,
+            d->boundaries[2] + (d->boundaries[0] - d->boundaries[2]) * image_cropbottom / radar_height,
+            d->boundaries[3] - (d->boundaries[3] - d->boundaries[1]) * image_cropright / radar_width //
+        };
 
-        auto inset_r_x_pos = std::max(0, original_cropw_floor);
-        auto inset_r_y_pos = std::max(0, original_cropn_floor);
+        // bounds for the approximated cropped image
+        std::array<double, 4> image_cropbounds_floor = {
+            d->boundaries[0] - (d->boundaries[0] - d->boundaries[2]) * image_croptop_floor / radar_height,
+            d->boundaries[1] + (d->boundaries[3] - d->boundaries[1]) * image_cropleft_floor / radar_width,
+            d->boundaries[2] + (d->boundaries[0] - d->boundaries[2]) * image_cropbottom_floor / radar_height,
+            d->boundaries[3] - (d->boundaries[3] - d->boundaries[1]) * image_cropright_floor / radar_width //
+        };
 
-        cv::Mat inset_m(temp_cropped, cv::Rect(inset_m_x_pos, inset_m_y_pos, inset_mr_x_width, inset_mr_y_width));
-        cv::Mat inset_r(original_image, cv::Rect(inset_r_x_pos, inset_r_y_pos, inset_mr_x_width, inset_mr_y_width));
+        // this is where to put the image on the container
+        // points: x,y
+        std::array<int, 2> image_croppoints = {
+            width * (image_cropbounds[1] - boundaries[1]) / (boundaries[3] - boundaries[1]),
+            height * (boundaries[0] - image_cropbounds[0]) / (boundaries[0] - boundaries[2]) //
+        };
 
-        inset_r.copyTo(inset_m);
+        // scale (resize) the image according to width, height and boundaries
+        int scaled_width =
+            round(width * (image_cropbounds_floor[3] - image_cropbounds_floor[1]) / (boundaries[3] - boundaries[1]));
+        int scaled_height =
+            round(height * (image_cropbounds_floor[0] - image_cropbounds_floor[2]) / (boundaries[0] - boundaries[2]));
 
-        int resized_uncropped_width =
-            width + width * ((original_cropw - original_cropw_floor + original_crope - original_crope_floor) / temp_width);
-        int resized_uncropped_height =
-            height + height * ((original_cropn - original_cropn_floor + original_crops - original_crops_floor) / temp_height);
+        cv::resize(image, image, cv::Size(scaled_width, scaled_height), 0, 0, cv::INTER_NEAREST);
 
-        cv::Mat resized_uncropped;
-        cv::resize(temp_cropped, resized_uncropped, cv::Size(resized_uncropped_width, resized_uncropped_height), 0, 0,
-            cv::INTER_NEAREST);
+        // create image roi of the more accurate version (in some cases it will be more accurate)
+        int trim_left = round(scaled_width * (image_cropbounds[1] - image_cropbounds_floor[1]) /
+            (image_cropbounds_floor[3] - image_cropbounds_floor[1]));
+        int trim_right = round(scaled_width * (image_cropbounds_floor[3] - image_cropbounds[3]) /
+            (image_cropbounds_floor[3] - image_cropbounds_floor[1]));
 
-        cv::Mat resized_cropped = cv::Mat::zeros(height, width, CV_8UC4);
-        int trim_left = (original_cropw - original_cropw_floor) / temp_width * width;
-        int trim_top = (original_cropn - original_cropn_floor) / temp_height * height;
+        int trim_top = round(scaled_height * (image_cropbounds_floor[0] - image_cropbounds[0]) /
+            (image_cropbounds_floor[0] - image_cropbounds_floor[3]));
+        int trim_bottom = round(scaled_height * (image_cropbounds[2] - image_cropbounds_floor[2]) /
+            (image_cropbounds_floor[0] - image_cropbounds_floor[3]));
 
-        cv::Mat resized_cropped_inset(resized_uncropped, cv::Rect(trim_left, trim_top, width, height));
-        resized_cropped_inset.copyTo(resized_cropped);
+        // using std::min just in case slightly inaccurate calculation made it few pixels larger than what
+        // the container can hold
+        int trim_width = scaled_width - trim_left - trim_right;
+        trim_width = std::min(width - trim_left, trim_width);
 
-        if (i == 0) {
-            // first time, just copy
-            resized_cropped.copyTo(container);
-        } else {
-            map::overlayImage(&container, &resized_cropped, cv::Point(0, 0));
-        }
+        int trim_height = scaled_height - trim_top - trim_bottom;
+        trim_height = std::min(height - trim_top, trim_height);
+
+        cv::Mat image_roi = image(cv::Rect(trim_left, trim_top, trim_width, trim_height));
+        cv::Mat container_roi = container(cv::Rect(image_croppoints[0], image_croppoints[1], trim_width, trim_height));
+
+        map::overlayImage(&container_roi, &image_roi, cv::Point(0, 0));
     }
 
     return container;
