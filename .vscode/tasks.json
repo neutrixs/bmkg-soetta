@@ -8,6 +8,11 @@
             "group": {
                 "kind": "build",
                 "isDefault": true
+            },
+            "presentation": {
+                "reveal": "silent",
+                "revealProblems": "onProblem",
+                "close": true
             }
         },
         {
@@ -16,6 +21,11 @@
             "command": "cmake --preset Ninja-Debug-x64 && ninja -C build/Ninja-Debug-x64",
             "group": {
                 "kind": "build"
+            },
+            "presentation": {
+                "reveal": "silent",
+                "revealProblems": "onProblem",
+                "close": true
             }
         },
         {
