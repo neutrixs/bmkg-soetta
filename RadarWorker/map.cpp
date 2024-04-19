@@ -283,11 +283,16 @@ std::array<double, 4> map::OSM_get_bounding_box(std::string place) {
         return bounding_box;
     }
 
-    auto box = API_data[0]["boundingbox"];
-    bounding_box[0] = stod(static_cast<std::string>(box[1]));
-    bounding_box[1] = stod(static_cast<std::string>(box[2]));
-    bounding_box[2] = stod(static_cast<std::string>(box[0]));
-    bounding_box[3] = stod(static_cast<std::string>(box[3]));
+    for (int i = 0; i < API_data.size(); i++) {
+        if (API_data[i]["addresstype"] == "railway")
+            continue;
+        auto box = API_data[i]["boundingbox"];
+        bounding_box[0] = stod(static_cast<std::string>(box[1]));
+        bounding_box[1] = stod(static_cast<std::string>(box[2]));
+        bounding_box[2] = stod(static_cast<std::string>(box[0]));
+        bounding_box[3] = stod(static_cast<std::string>(box[3]));
+        break;
+    }
 
     return bounding_box;
 }
