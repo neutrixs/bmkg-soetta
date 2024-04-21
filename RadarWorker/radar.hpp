@@ -49,8 +49,7 @@ class Imagery {
         boundaries[3] = x2;
     }
     int zoom_level = 13;
-    // terrible quality, lots of interverence
-    // there is CGK nearby anyway
+    int ignore_after_mins = 20;
     std::vector<std::string> exclude_radar = {};
     cv::Mat render(int width, int height);
     void render_each(std::vector<std::string> *raw_images, RadarAPIDataVec *d, int pos);

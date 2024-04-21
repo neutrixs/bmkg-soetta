@@ -140,7 +140,47 @@ cv::Mat radar::Imagery::render(int width, int height) {
         cv::Mat image_roi = image(cv::Rect(trim_left, trim_top, trim_width, trim_height));
         cv::Mat container_roi = container(cv::Rect(image_croppoints[0], image_croppoints[1], trim_width, trim_height));
 
-        map::overlayImage(&container_roi, &image_roi, cv::Point(0, 0));
+        int &roi_width = trim_width;
+        int &roi_height = trim_height;
+        int &roi_x_start = image_croppoints[0];
+        int &roi_y_start = image_croppoints[1];
+
+        const int STEP = 100;
+
+        for (int y = 0; y < roi_height; y += STEP) {
+            for (int x = 0; x < roi_width; x += STEP) {
+                int width_current = std::min(STEP, roi_width - x);
+                int height_current = std::min(STEP, roi_height - y);
+
+                double cen_x = roi_x_start + (x + width_current) / 2.0;
+                double cen_y = roi_y_start + (y + height_current) / 2.0;
+
+                double lat = boundaries[0] - (boundaries[0] - boundaries[2]) * cen_y / height;
+                double lon = boundaries[1] + (boundaries[3] - boundaries[1]) * cen_x / width;
+
+                unsigned int closest_index = 0;
+                double prev_distance = UINT_MAX;
+                auto in_range = get_radars_in_range();
+
+                for (int i = 0; i < in_range.size(); i++) {
+                    auto data = *(in_range.at(i));
+
+                    double lat_dist = abs(data.lat - lat);
+                    double lon_dist = abs(data.lon - lon);
+                    double dist = sqrt(pow(lat_dist, 2.0) + pow(lon_dist, 2.0));
+
+                    if (dist < prev_distance)
+                        prev_distance = dist, closest_index = i;
+                }
+
+                if (in_range.at(closest_index) == d) {
+                    cv::Mat image_roi_current = image_roi(cv::Rect(x, y, width_current, height_current));
+                    cv::Mat container_roi_current = container_roi(cv::Rect(x, y, width_current, height_current));
+
+                    image_roi_current.copyTo(container_roi_current);
+                }
+            }
+        }
     }
 
     return container;
@@ -264,11 +304,11 @@ std::vector<radar::RadarAPIDataVec *> radar::Imagery::get_radars_in_range() {
         // so apparently the radar took an image at a random interval but it's like between
         // 5 to idk?? minutes (let's assume 20 min max)
         // umm, plus, it takes like 1 million years for the radar to update to the latest data
-        // so let's skip any that's older than 25 min
+        // so let's skip any that's older than specified min
         auto a = std::time(nullptr);
         auto b = std::chrono::system_clock::to_time_t(radar_data.CMAX.time);
 
-        if (std::time(nullptr) - std::chrono::system_clock::to_time_t(radar_data.CMAX.time) > (25 * 60))
+        if (std::time(nullptr) - std::chrono::system_clock::to_time_t(radar_data.CMAX.time) > (ignore_after_mins * 60))
             continue;
 
         output.push_back(&radar_data);
@@ -276,19 +316,6 @@ std::vector<radar::RadarAPIDataVec *> radar::Imagery::get_radars_in_range() {
 
     double cen_lat = (boundaries[0] + boundaries[2]) / 2;
     double cen_lon = (boundaries[1] + boundaries[3]) / 2;
-
-    // sort by distance descending
-    std::sort(output.begin(), output.end(), [cen_lat, cen_lon](radar::RadarAPIDataVec *&a, radar::RadarAPIDataVec *&b) {
-        double dist_a_x = abs(a->lon - cen_lon);
-        double dist_a_y = abs(a->lat - cen_lat);
-        double dist_a = sqrt(pow(dist_a_x, 2) + pow(dist_a_y, 2));
-
-        double dist_b_x = abs(b->lon - cen_lon);
-        double dist_b_y = abs(b->lat - cen_lat);
-        double dist_b = sqrt(pow(dist_b_x, 2) + pow(dist_b_y, 2));
-
-        return dist_a > dist_b;
-    });
 
     return output;
 }
