@@ -106,8 +106,8 @@ cv::Mat radar::Imagery::render(int width, int height) {
         // this is where to put the image on the container
         // points: x,y
         std::array<int, 2> image_croppoints = {
-            width * (image_cropbounds[1] - boundaries[1]) / (boundaries[3] - boundaries[1]),
-            height * (boundaries[0] - image_cropbounds[0]) / (boundaries[0] - boundaries[2]) //
+            static_cast<int>(width * (image_cropbounds[1] - boundaries[1]) / (boundaries[3] - boundaries[1])),
+            static_cast<int>(height * (boundaries[0] - image_cropbounds[0]) / (boundaries[0] - boundaries[2])) //
         };
 
         // scale (resize) the image according to width, height and boundaries
