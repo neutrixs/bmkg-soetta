@@ -9,7 +9,6 @@
 #include <radar_debug/debug.h>
 
 #include "map.hpp"
-#include "png.hpp"
 
 using json = nlohmann::json;
 
@@ -59,11 +58,9 @@ cv::Mat radar::Imagery::render(int width, int height) {
         std::string content = response.str();
         std::vector<uchar> buffer(content.begin(), content.end());
 
-        auto resolution = png::get_resolution(content);
-        int radar_width = resolution[0];
-        int radar_height = resolution[1];
-
         cv::Mat image = cv::imdecode(buffer, cv::IMREAD_UNCHANGED);
+
+        int radar_width = image.cols, radar_height = image.rows;
 
         // crop if necessary to fit the map (approximate, obviously larger than the accurate size)
         // we will crop it later
