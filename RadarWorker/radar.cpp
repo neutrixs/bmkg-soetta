@@ -132,10 +132,10 @@ cv::Mat radar::Imagery::render(int width, int height) {
         // using std::min just in case slightly inaccurate calculation made it few pixels larger than what
         // the container can hold
         int trim_width = scaled_width - trim_left - trim_right;
-        trim_width = std::min(width - trim_left, trim_width);
+        trim_width = std::min(width - image_croppoints[0], trim_width);
 
         int trim_height = scaled_height - trim_top - trim_bottom;
-        trim_height = std::min(height - trim_top, trim_height);
+        trim_height = std::min(height - image_croppoints[1], trim_height);
 
         cv::Mat image_roi = image(cv::Rect(trim_left, trim_top, trim_width, trim_height));
         cv::Mat container_roi = container(cv::Rect(image_croppoints[0], image_croppoints[1], trim_width, trim_height));
@@ -144,6 +144,18 @@ cv::Mat radar::Imagery::render(int width, int height) {
         int &roi_height = trim_height;
         int &roi_x_start = image_croppoints[0];
         int &roi_y_start = image_croppoints[1];
+
+        // check if the radar is outdated, if it is, create striped pattern, every some px
+        const int STRIPE_EVERY_PX = 4;
+        cv::Mat empty_mask = cv::Mat::zeros(STRIPE_EVERY_PX, roi_width, CV_8UC4);
+        if (std::time(nullptr) - std::chrono::system_clock::to_time_t(d->CMAX.time) > (ignore_after_mins * 60)) {
+            for (int y = 0; y < roi_height; y += STRIPE_EVERY_PX * 2) {
+                int current_height = std::min(STRIPE_EVERY_PX, roi_height - y);
+                cv::Mat empty_mask_roi = empty_mask(cv::Rect(0, 0, roi_width, current_height));
+                cv::Mat image_roi_roi = image_roi(cv::Rect(0, y, roi_width, current_height));
+                empty_mask_roi.copyTo(image_roi_roi);
+            }
+        }
 
         const int STEP = 100;
 
@@ -160,10 +172,9 @@ cv::Mat radar::Imagery::render(int width, int height) {
 
                 unsigned int closest_index = 0;
                 double prev_distance = UINT_MAX;
-                auto in_range = get_radars_in_range();
 
-                for (int i = 0; i < in_range.size(); i++) {
-                    auto data = *(in_range.at(i));
+                for (int i = 0; i < radars.size(); i++) {
+                    auto data = *(radars.at(i));
 
                     double lat_dist = abs(data.lat - lat);
                     double lon_dist = abs(data.lon - lon);
@@ -173,7 +184,7 @@ cv::Mat radar::Imagery::render(int width, int height) {
                         prev_distance = dist, closest_index = i;
                 }
 
-                if (in_range.at(closest_index) == d) {
+                if (radars.at(closest_index) == d) {
                     cv::Mat image_roi_current = image_roi(cv::Rect(x, y, width_current, height_current));
                     cv::Mat container_roi_current = container_roi(cv::Rect(x, y, width_current, height_current));
 
@@ -299,16 +310,6 @@ std::vector<radar::RadarAPIDataVec *> radar::Imagery::get_radars_in_range() {
 
         bool in_range = radar::is_overlapping(boundaries, radar_data.boundaries);
         if (!in_range)
-            continue;
-
-        // so apparently the radar took an image at a random interval but it's like between
-        // 5 to idk?? minutes (let's assume 20 min max)
-        // umm, plus, it takes like 1 million years for the radar to update to the latest data
-        // so let's skip any that's older than specified min
-        auto a = std::time(nullptr);
-        auto b = std::chrono::system_clock::to_time_t(radar_data.CMAX.time);
-
-        if (std::time(nullptr) - std::chrono::system_clock::to_time_t(radar_data.CMAX.time) > (ignore_after_mins * 60))
             continue;
 
         output.push_back(&radar_data);
