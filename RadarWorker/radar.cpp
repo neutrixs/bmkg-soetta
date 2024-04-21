@@ -4,6 +4,7 @@
 #include <curlpp/Easy.hpp>
 #include <curlpp/Options.hpp>
 #include <curlpp/cURLpp.hpp>
+#include <date/date.h>
 #include <iostream>
 #include <nlohmann/json.hpp>
 #include <radar_debug/debug.h>
@@ -199,10 +200,9 @@ std::vector<radar::RadarAPIDataVec> &radar::Imagery::get_radar_datas() {
         std::string file = static_cast<std::string>(radar_data["CMAX"]["file"]);
         std::string time_string = static_cast<std::string>(radar_data["CMAX"]["timeUTC"]);
 
-        std::stringstream ss(time_string);
-        std::tm tm = {};
-        ss >> std::get_time(&tm, "%Y-%m-%d %H:%M %Z");
-        auto tp = std::chrono::system_clock::from_time_t(std::mktime(&tm));
+        std::istringstream in{time_string};
+        std::chrono::system_clock::time_point tp;
+        in >> date::parse("%Y-%m-%d %H:%M %Z", tp);
 
         radar::RadarAPICMAX cmax;
         cmax.file = file;
