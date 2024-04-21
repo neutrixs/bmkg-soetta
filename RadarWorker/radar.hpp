@@ -51,7 +51,7 @@ class Imagery {
     int zoom_level = 13;
     // terrible quality, lots of interverence
     // there is CGK nearby anyway
-    std::vector<std::string> exclude_radar = {"JAK"};
+    std::vector<std::string> exclude_radar = {};
     cv::Mat render(int width, int height);
     std::vector<radar::RadarAPIDataVec> &get_radar_datas();
     std::vector<radar::RadarAPIDataVec *> get_radars_in_range();

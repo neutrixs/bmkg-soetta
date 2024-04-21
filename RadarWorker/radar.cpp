@@ -241,6 +241,16 @@ std::vector<radar::RadarAPIDataVec *> radar::Imagery::get_radars_in_range() {
         if (!in_range)
             continue;
 
+        // so apparently the radar took an image at a random interval but it's like between
+        // 5 to idk?? minutes (let's assume 20 min max)
+        // umm, plus, it takes like 1 million years for the radar to update to the latest data
+        // so let's skip any that's older than 25 min
+        auto a = std::time(nullptr);
+        auto b = std::chrono::system_clock::to_time_t(radar_data.CMAX.time);
+
+        if (std::time(nullptr) - std::chrono::system_clock::to_time_t(radar_data.CMAX.time) > (25 * 60))
+            continue;
+
         output.push_back(&radar_data);
     }
 
