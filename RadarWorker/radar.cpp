@@ -8,6 +8,7 @@
 #include <iostream>
 #include <nlohmann/json.hpp>
 #include <radar_debug/debug.h>
+#include <thread>
 
 #include "map.hpp"
 
@@ -36,27 +37,24 @@ cv::Mat radar::Imagery::render(int width, int height) {
     std::vector<radar::RadarAPIDataVec *> radars = get_radars_in_range();
     cv::Mat container = cv::Mat::zeros(height, width, CV_8UC4);
 
+    std::vector<std::thread> jobs;
+    std::vector<std::string> raw_images(radars.size(), std::string());
+
     for (int i = 0; i < radars.size(); i++) {
         auto d = radars.at(i);
+        std::thread job([this, &raw_images, d, i] { this->render_each(&raw_images, d, i); });
 
-        curlpp::initialize();
-        std::stringstream response;
+        jobs.push_back(std::move(job));
+    }
 
-        try {
-            curlpp::Easy req;
-            req.setOpt(new curlpp::options::Url(d->CMAX.file));
+    for (auto &job : jobs) {
+        job.join();
+    }
 
-            curlpp::options::WriteStream write(&response);
-            req.setOpt(write);
+    for (int i = 0; i < raw_images.size(); i++) {
+        auto d = radars.at(i);
+        auto content = raw_images.at(i);
 
-            req.perform();
-        } catch (curlpp::RuntimeError &e) {
-            std::cerr << e.what() << std::endl;
-        } catch (curlpp::LogicError &e) {
-            std::cerr << e.what() << std::endl;
-        }
-
-        std::string content = response.str();
         std::vector<uchar> buffer(content.begin(), content.end());
 
         cv::Mat image = cv::imdecode(buffer, cv::IMREAD_UNCHANGED);
@@ -146,6 +144,28 @@ cv::Mat radar::Imagery::render(int width, int height) {
     }
 
     return container;
+}
+
+void radar::Imagery::render_each(std::vector<std::string> *raw_images, RadarAPIDataVec *d, int pos) {
+    curlpp::initialize();
+    std::stringstream response;
+
+    try {
+        curlpp::Easy req;
+        req.setOpt(new curlpp::options::Url(d->CMAX.file));
+
+        curlpp::options::WriteStream write(&response);
+        req.setOpt(write);
+
+        req.perform();
+    } catch (curlpp::RuntimeError &e) {
+        std::cerr << e.what() << std::endl;
+    } catch (curlpp::LogicError &e) {
+        std::cerr << e.what() << std::endl;
+    }
+
+    std::string content = response.str();
+    (*raw_images).at(pos) = content;
 }
 
 std::vector<radar::RadarAPIDataVec> &radar::Imagery::get_radar_datas() {

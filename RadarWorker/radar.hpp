@@ -53,6 +53,7 @@ class Imagery {
     // there is CGK nearby anyway
     std::vector<std::string> exclude_radar = {};
     cv::Mat render(int width, int height);
+    void render_each(std::vector<std::string> *raw_images, RadarAPIDataVec *d, int pos);
     std::vector<radar::RadarAPIDataVec> &get_radar_datas();
     std::vector<radar::RadarAPIDataVec *> get_radars_in_range();
     radar::RadarAPIDataVec &get_closest();

@@ -39,80 +39,25 @@ cv::Mat map::Tiles::render() {
     int rows = range_south_approx - range_north_approx;
     int cols = range_east_approx - range_west_approx;
 
-    std::vector<std::string> tiles_images;
+    std::vector<std::string> tiles_images(rows * cols, std::string());
 
     fs::path usr_tempdir = fs::current_path() / ".cache";
     fs::create_directories(usr_tempdir);
 
-    for (int tiles_y = range_north_approx, dl_count = 1; tiles_y < range_south_approx; tiles_y++) {
+    std::vector<std::thread> jobs;
+
+    for (int tiles_y = range_north_approx, dl_count = 0; tiles_y < range_south_approx; tiles_y++) {
         for (int tiles_x = range_west_approx; tiles_x < range_east_approx; tiles_x++, dl_count++) {
-            std::string URL_SCHEME = OSM_TILES_BASE_URL + std::to_string(zoom_level) + "/" + std::to_string(tiles_x) + "/" +
-                std::to_string(tiles_y) + ".png";
+            std::thread job([this, &tiles_images, tiles_x, tiles_y, usr_tempdir, dl_count] {
+                this->download_each(&tiles_images, tiles_x, tiles_y, usr_tempdir, dl_count);
+            });
 
-            std::hash<std::string> hasher;
-            size_t hash_value = hasher(URL_SCHEME);
-
-            std::stringstream ss;
-            ss << std::hex << hash_value;
-
-            fs::path PATH_SCHEME = usr_tempdir / ss.str();
-            bool cache_exists = fs::exists(PATH_SCHEME);
-
-            std::string data;
-            if (cache_exists) {
-                std::ifstream cache_file(PATH_SCHEME, std::ios::binary);
-                if (!cache_file.is_open()) {
-                    goto redownload;
-                }
-
-                std::vector<char> buffer(std::istreambuf_iterator<char>(cache_file), {});
-                data = std::string(buffer.begin(), buffer.end());
-
-                cache_file.close();
-            } else {
-            redownload:
-                // TODO: handle exception
-                curlpp::initialize();
-                std::stringstream response;
-
-                // fake headers to bypass the limitation
-                // this is enough
-                std::list<std::string> headers;
-                headers.push_back("User-Agent: Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
-                                  "AppleWebKit/537.36 (KHTML, like Gecko) Chrome/123.0.0.0 "
-                                  "Safari/537.36");
-                headers.push_back("Referer: https://www.openstreetmap.org/");
-                headers.push_back("Accept: "
-                                  "image/avif,image/webp,image/apng, text/html,image/svg+xml,image/*,*/*;q=0.8");
-                headers.push_back("Accept-Encoding: gzip, deflate, br, zstd");
-                headers.push_back("Sec-Ch-Ua: \"Google Chrome\";v=\"123\", \"Not:A-Brand\";v=\"8\", "
-                                  "\"Chromium\";v=\"123\"");
-
-                try {
-                    curlpp::Easy req;
-
-                    req.setOpt(new curlpp::options::Url(URL_SCHEME));
-                    req.setOpt(new curlpp::options::HttpHeader(headers));
-
-                    curlpp::options::WriteStream write(&response);
-                    req.setOpt(write);
-
-                    req.perform();
-                } catch (curlpp::RuntimeError &e) {
-                    std::cerr << e.what() << std::endl;
-                } catch (curlpp::LogicError &e) {
-                    std::cerr << e.what() << std::endl;
-                }
-
-                data = response.str();
-
-                std::ofstream output_file(PATH_SCHEME, std::ios::binary);
-                output_file.write(data.c_str(), data.size());
-                output_file.close();
-            }
-
-            tiles_images.push_back(data);
+            jobs.push_back(std::move(job));
         }
+    }
+
+    for (auto &job : jobs) {
+        job.join();
     }
 
     // get resolution of the first one as a reference
@@ -159,6 +104,77 @@ cv::Mat map::Tiles::render() {
     cv::merge(channels, cropped_canvas_alpha);
 
     return cropped_canvas_alpha;
+}
+
+void map::Tiles::download_each(
+    std::vector<std::string> *tiles_images, int tiles_x, int tiles_y, fs::path usr_tempdir, int pos) {
+
+    std::string URL_SCHEME = OSM_TILES_BASE_URL + std::to_string(zoom_level) + "/" + std::to_string(tiles_x) + "/" +
+        std::to_string(tiles_y) + ".png";
+
+    std::hash<std::string> hasher;
+    size_t hash_value = hasher(URL_SCHEME);
+
+    std::stringstream ss;
+    ss << std::hex << hash_value;
+
+    fs::path PATH_SCHEME = usr_tempdir / ss.str();
+    bool cache_exists = fs::exists(PATH_SCHEME);
+
+    std::string data;
+    if (cache_exists) {
+        std::ifstream cache_file(PATH_SCHEME, std::ios::binary);
+        if (!cache_file.is_open()) {
+            goto redownload;
+        }
+
+        std::vector<char> buffer(std::istreambuf_iterator<char>(cache_file), {});
+        data = std::string(buffer.begin(), buffer.end());
+
+        cache_file.close();
+    } else {
+    redownload:
+        // TODO: handle exception
+        curlpp::initialize();
+        std::stringstream response;
+
+        // fake headers to bypass the limitation
+        // this is enough
+        std::list<std::string> headers;
+        headers.push_back("User-Agent: Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
+                          "AppleWebKit/537.36 (KHTML, like Gecko) Chrome/123.0.0.0 "
+                          "Safari/537.36");
+        headers.push_back("Referer: https://www.openstreetmap.org/");
+        headers.push_back("Accept: "
+                          "image/avif,image/webp,image/apng, text/html,image/svg+xml,image/*,*/*;q=0.8");
+        headers.push_back("Accept-Encoding: gzip, deflate, br, zstd");
+        headers.push_back("Sec-Ch-Ua: \"Google Chrome\";v=\"123\", \"Not:A-Brand\";v=\"8\", "
+                          "\"Chromium\";v=\"123\"");
+
+        try {
+            curlpp::Easy req;
+
+            req.setOpt(new curlpp::options::Url(URL_SCHEME));
+            req.setOpt(new curlpp::options::HttpHeader(headers));
+
+            curlpp::options::WriteStream write(&response);
+            req.setOpt(write);
+
+            req.perform();
+        } catch (curlpp::RuntimeError &e) {
+            std::cerr << e.what() << std::endl;
+        } catch (curlpp::LogicError &e) {
+            std::cerr << e.what() << std::endl;
+        }
+
+        data = response.str();
+
+        std::ofstream output_file(PATH_SCHEME, std::ios::binary);
+        output_file.write(data.c_str(), data.size());
+        output_file.close();
+    }
+
+    (*tiles_images).at(pos) = data;
 }
 
 cv::Mat map::Tiles::render_with_overlay_radar(float map_brightness, float radar_opacity) {
