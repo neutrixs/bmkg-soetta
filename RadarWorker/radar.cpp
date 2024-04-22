@@ -168,6 +168,7 @@ cv::Mat radar::Imagery::render(int width, int height) {
 
                 unsigned int closest_index = 0;
                 double prev_distance = UINT_MAX;
+                double current_distance = 0;
 
                 for (int i = 0; i < radars.size(); i++) {
                     auto data = *(radars.at(i));
@@ -176,11 +177,25 @@ cv::Mat radar::Imagery::render(int width, int height) {
                     double lon_dist = abs(data.lon - lon);
                     double dist = sqrt(pow(lat_dist, 2.0) + pow(lon_dist, 2.0));
 
+                    if (radars.at(i) == d) {
+                        current_distance = dist;
+                    }
+
                     if (dist < prev_distance)
                         prev_distance = dist, closest_index = i;
                 }
 
-                if (radars.at(closest_index) == d) {
+                // if the distance difference between the closest and current radar
+                // is the same or less than check_radar_dist_every_px
+                // we can just ignore it
+                // why? you see, we loop through the distance via the radar
+                // bounds. not the map bounds, so there might be places
+                // where it'll be always empty (not good)
+
+                // in this case, we'll use the width as the reference
+                double dist = width * abs(current_distance - prev_distance) / (boundaries[3] - boundaries[1]);
+
+                if (radars.at(closest_index) == d || dist <= check_radar_dist_every_px) {
                     cv::Mat image_roi_current = image_roi(cv::Rect(x, y, width_current, height_current));
                     cv::Mat container_roi_current = container_roi(cv::Rect(x, y, width_current, height_current));
 
