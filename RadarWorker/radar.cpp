@@ -160,8 +160,8 @@ cv::Mat radar::Imagery::render(int width, int height) {
                 int width_current = std::min(check_radar_dist_every_px, roi_width - x);
                 int height_current = std::min(check_radar_dist_every_px, roi_height - y);
 
-                double cen_x = roi_x_start + (x + width_current) / 2.0;
-                double cen_y = roi_y_start + (y + height_current) / 2.0;
+                double cen_x = roi_x_start + (2 * x + width_current) / 2.0;
+                double cen_y = roi_y_start + (2 * y + height_current) / 2.0;
 
                 double lat = boundaries[0] - (boundaries[0] - boundaries[2]) * cen_y / height;
                 double lon = boundaries[1] + (boundaries[3] - boundaries[1]) * cen_x / width;
