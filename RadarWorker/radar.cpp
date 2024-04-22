@@ -42,7 +42,7 @@ cv::Mat radar::Imagery::render(int width, int height) {
 
     for (int i = 0; i < radars.size(); i++) {
         auto d = radars.at(i);
-        std::thread job([this, &raw_images, d, i] { this->render_each(&raw_images, d, i); });
+        std::thread job([this, &raw_images, d, i] { this->download_each(&raw_images, d, i); });
 
         jobs.push_back(std::move(job));
     }
@@ -197,7 +197,7 @@ cv::Mat radar::Imagery::render(int width, int height) {
     return container;
 }
 
-void radar::Imagery::render_each(std::vector<std::string> *raw_images, RadarAPIDataVec *d, int pos) {
+void radar::Imagery::download_each(std::vector<std::string> *raw_images, RadarAPIDataVec *d, int pos) {
     curlpp::initialize();
     std::stringstream response;
 
