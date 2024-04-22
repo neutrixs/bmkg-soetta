@@ -155,12 +155,10 @@ cv::Mat radar::Imagery::render(int width, int height) {
             }
         }
 
-        const int STEP = 100;
-
-        for (int y = 0; y < roi_height; y += STEP) {
-            for (int x = 0; x < roi_width; x += STEP) {
-                int width_current = std::min(STEP, roi_width - x);
-                int height_current = std::min(STEP, roi_height - y);
+        for (int y = 0; y < roi_height; y += check_radar_dist_every_px) {
+            for (int x = 0; x < roi_width; x += check_radar_dist_every_px) {
+                int width_current = std::min(check_radar_dist_every_px, roi_width - x);
+                int height_current = std::min(check_radar_dist_every_px, roi_height - y);
 
                 double cen_x = roi_x_start + (x + width_current) / 2.0;
                 double cen_y = roi_y_start + (y + height_current) / 2.0;

@@ -50,6 +50,7 @@ class Imagery {
     }
     int zoom_level = 13;
     int ignore_after_mins = 20;
+    int check_radar_dist_every_px = 100;
     std::vector<std::string> exclude_radar = {};
     cv::Mat render(int width, int height);
     void download_each(std::vector<std::string> *raw_images, RadarAPIDataVec *d, int pos);
