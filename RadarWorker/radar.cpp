@@ -144,7 +144,7 @@ cv::Mat radar::Imagery::render(int width, int height) {
         int &roi_y_start = image_croppoints[1];
 
         // check if the radar is outdated, if it is, create striped pattern, every some px
-        const int STRIPE_EVERY_PX = 4;
+        const int STRIPE_EVERY_PX = 2;
         cv::Mat empty_mask = cv::Mat::zeros(STRIPE_EVERY_PX, roi_width, CV_8UC4);
         if (std::time(nullptr) - std::chrono::system_clock::to_time_t(d->CMAX.time) > (ignore_after_mins * 60)) {
             for (int y = 0; y < roi_height; y += STRIPE_EVERY_PX * 2) {
