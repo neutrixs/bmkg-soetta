@@ -123,9 +123,9 @@ cv::Mat radar::Imagery::render(int width, int height) {
             (image_cropbounds_floor[3] - image_cropbounds_floor[1]));
 
         int trim_top = round(scaled_height * (image_cropbounds_floor[0] - image_cropbounds[0]) /
-            (image_cropbounds_floor[0] - image_cropbounds_floor[3]));
+            (image_cropbounds_floor[0] - image_cropbounds_floor[2]));
         int trim_bottom = round(scaled_height * (image_cropbounds[2] - image_cropbounds_floor[2]) /
-            (image_cropbounds_floor[0] - image_cropbounds_floor[3]));
+            (image_cropbounds_floor[0] - image_cropbounds_floor[2]));
 
         // using std::min just in case slightly inaccurate calculation made it few pixels larger than what
         // the container can hold
