@@ -10,8 +10,6 @@
 #include <radar_debug/debug.h>
 #include <thread>
 
-#include "map.hpp"
-
 using json = nlohmann::json;
 
 const std::string BMKG_RADAR_BASE_URL = "https://api-apps.bmkg.go.id/storage/radar/radar-dev.json";

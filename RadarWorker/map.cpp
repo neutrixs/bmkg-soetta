@@ -177,7 +177,7 @@ void map::Tiles::download_each(
     (*tiles_images).at(pos) = data;
 }
 
-cv::Mat map::Tiles::render_with_overlay_radar(float map_brightness, float radar_opacity) {
+cv::Mat map::Tiles::render_with_overlay_radar(radar::Imagery imagery, float map_brightness, float radar_opacity) {
     cv::Mat base_map = render();
     for (int row = 0; row < base_map.rows; row++) {
         for (int col = 0; col < base_map.cols; col++) {
@@ -188,7 +188,6 @@ cv::Mat map::Tiles::render_with_overlay_radar(float map_brightness, float radar_
         }
     }
 
-    radar::Imagery imagery;
     imagery.set_boundaries(boundaries[0], boundaries[1], boundaries[2], boundaries[3]);
     cv::Mat radar_imagery = imagery.render(base_map.cols, base_map.rows);
     for (int i = 0; i < radar_imagery.rows; i++) {
@@ -202,6 +201,11 @@ cv::Mat map::Tiles::render_with_overlay_radar(float map_brightness, float radar_
     cv::cvtColor(base_map, base_map, cv::COLOR_BGRA2BGR);
 
     return base_map;
+}
+
+cv::Mat map::Tiles::render_with_overlay_radar(float map_brightness, float radar_opacity) {
+    radar::Imagery imagery;
+    return render_with_overlay_radar(imagery, map_brightness, radar_opacity);
 }
 
 void map::Tiles::set_appropriate_zoom_level() {

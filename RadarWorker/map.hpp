@@ -1,6 +1,7 @@
 #ifndef MAP_HPP
 #define MAP_HPP
 
+#include "radar.hpp"
 #include <array>
 #include <boost/filesystem.hpp>
 #include <future>
@@ -20,9 +21,11 @@ class Tiles {
     }
     int zoom_level;
     cv::Mat render();
-    void download_each(std::vector<std::string> *tiles_images, int tiles_x, int tiles_y, boost::filesystem::path usr_tempdir, int pos);
+    void download_each(
+        std::vector<std::string> *tiles_images, int tiles_x, int tiles_y, boost::filesystem::path usr_tempdir, int pos);
     cv::Mat render_with_overlay_radar(float map_brightness = 0.7f, float radar_opacity = 0.6f);
-    const int MAX_APPROPRIATE_TILES = 50;
+    cv::Mat render_with_overlay_radar(radar::Imagery imagery, float map_brightness = 0.7f, float radar_opacity = 0.6f);
+    int MAX_APPROPRIATE_TILES = 50;
     void set_appropriate_zoom_level();
 
   private:
