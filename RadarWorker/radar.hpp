@@ -8,34 +8,32 @@
 #include <vector>
 
 namespace radar {
-struct RadarAPICMAX {
-    std::chrono::system_clock::time_point time;
-    std::string file;
+constexpr char RADAR_LIST_API_URL[] = "https://radar.bmkg.go.id:8090/radarlist";
+constexpr char RADAR_IMAGE_PUBLIC_API_URL[] = "https://api-apps.bmkg.go.id/api/radar-image";
+constexpr char RADAR_IMAGE_API_URL[] = "https://radar.bmkg.go.id:8090/sidarmaimage";
 
-    RadarAPICMAX() {
-        time = std::chrono::system_clock::from_time_t(0);
-        file = "";
-    }
-};
-
-struct RadarAPIDataVec {
-    // north, west, south, east
-    std::array<double, 4> boundaries;
+struct RadarList {
+    std::array<double, 4> boundaries{};
     std::string kota;
     std::string stasiun;
     std::string kode;
     double lat;
     double lon;
-    RadarAPICMAX CMAX;
+};
 
-    RadarAPIDataVec() {
-        boundaries = {0.0, 0.0, 0.0, 0.0};
-        kota = "";
-        stasiun = "";
-        kode = "";
-        lat = 0.0;
-        lon = 0.0;
-    }
+struct RadarImageData {
+    std::vector<std::chrono::system_clock::time_point> time;
+    std::vector<std::string> file;
+};
+
+struct RadarImage {
+    RadarImageData data;
+    std::array<double, 4> boundaries{};
+    std::string kota;
+    std::string stasiun;
+    std::string kode;
+    double lat;
+    double lon;
 };
 
 bool is_overlapping(std::array<double, 4> x, std::array<double, 4> y);
@@ -48,20 +46,25 @@ class Imagery {
         boundaries[2] = y2;
         boundaries[3] = x2;
     }
+
+    int declare_old_after_mins = 20;
+    bool ignore_old_radars = false;
+    bool stripe_on_old_radars = true;
+
     int zoom_level = 13;
-    int ignore_after_mins = 20;
-    int check_radar_dist_every_px = 100;
-    std::vector<std::string> exclude_radar = {};
+    int check_radar_dist_every_px = 50;
+    std::vector<std::string> exclude_radar;
+
     cv::Mat render(int width, int height);
-    void download_each(std::vector<std::string> *raw_images, RadarAPIDataVec *d, int pos);
-    std::vector<radar::RadarAPIDataVec> &get_radar_datas();
-    std::vector<radar::RadarAPIDataVec *> get_radars_in_range();
-    radar::RadarAPIDataVec &get_closest();
 
   private:
-    std::array<double, 4> boundaries = {0.0, 0.0, 0.0, 0.0};
-    std::vector<radar::RadarAPIDataVec> radar_datas;
+    std::array<double, 4> boundaries;
+    std::vector<RadarImage> radar_datas;
+    std::vector<RadarImage> &get_radar_datas();
+    void fetch_detailed_data(std::string code, std::mutex &mtx);
+    void download(std::vector<std::string> *raw_images, RadarImage &d, int pos, std::mutex &mtx);
 };
+
 } // namespace radar
 
 #endif
