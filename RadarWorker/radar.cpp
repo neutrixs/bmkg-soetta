@@ -375,7 +375,7 @@ void radar::Imagery::fetch_detailed_data(std::string code, std::mutex &mtx) {
     }
 
     // ignore if the data is old, if the user specifies so
-    auto seconds_to_now = std::time(nullptr) - std::chrono::system_clock::to_time_t(radar_data.data.time.back());
+    auto seconds_to_now = std::time(nullptr) - std::chrono::system_clock::to_time_t(time.back());
     if (seconds_to_now > (declare_old_after_mins * 60) && ignore_old_radars)
         return;
 
