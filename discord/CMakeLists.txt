@@ -21,3 +21,15 @@ target_link_libraries(Discord "${DPP_LIBRARIES}")
 pkg_check_modules(radarworker REQUIRED radarworker)
 include_directories("${radarworker_INCLUDE_DIRS}")
 target_link_libraries(Discord "${radarworker_LIBRARIES}")
+
+pkg_check_modules(OPENCV4 REQUIRED opencv4)
+include_directories("${OPENCV4_INCLUDE_DIRS}")
+target_link_libraries(Discord "${OPENCV4_LIBRARIES}")
+
+pkg_check_modules(CURLPP REQUIRED curlpp)
+include_directories("${CURLPP_INCLUDE_DIRS}")
+target_link_libraries(Discord ${CURLPP_LIBRARIES})
+
+find_package(Boost REQUIRED COMPONENTS filesystem)
+include_directories("${Boost_INCLUDE_DIRS}")
+target_link_libraries(Discord ${Boost_LIBRARIES})
