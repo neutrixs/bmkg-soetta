@@ -1,11 +1,9 @@
-#include "png.hpp"
-
 #include <bitset>
 #include <iostream>
+#include <radarworker/png.hpp>
+#include <string>
 
-#include "string"
-
-std::array<unsigned int, 2> png::get_resolution(std::string& data) {
+std::array<unsigned int, 2> png::get_resolution(std::string &data) {
     std::string ihdr_start = data.substr(16);
 
     std::string width_part = ihdr_start.substr(0, 4);

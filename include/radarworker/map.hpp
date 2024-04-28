@@ -1,11 +1,11 @@
 #ifndef MAP_HPP
 #define MAP_HPP
 
-#include "radar.hpp"
 #include <array>
 #include <boost/filesystem.hpp>
 #include <future>
 #include <opencv2/opencv.hpp>
+#include <radarworker/radar.hpp>
 #include <string>
 #include <vector>
 

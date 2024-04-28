@@ -1,5 +1,3 @@
-#include "map.hpp"
-
 #include <boost/filesystem.hpp>
 #include <cmath>
 #include <curlpp/Easy.hpp>
@@ -8,11 +6,11 @@
 #include <iostream>
 #include <nlohmann/json.hpp>
 #include <opencv2/opencv.hpp>
+#include <radarworker/map.hpp>
+#include <radarworker/png.hpp>
+#include <radarworker/radar.hpp>
 #include <sstream>
 #include <vector>
-
-#include "png.hpp"
-#include "radar.hpp"
 
 namespace fs = boost::filesystem;
 using json = nlohmann::json;

@@ -1,5 +1,3 @@
-#include "radar.hpp"
-
 #include <cmath>
 #include <curlpp/Easy.hpp>
 #include <curlpp/Options.hpp>
@@ -8,6 +6,7 @@
 #include <iostream>
 #include <nlohmann/json.hpp>
 #include <radar_debug/debug.h>
+#include <radarworker/radar.hpp>
 #include <thread>
 
 using json = nlohmann::json;
