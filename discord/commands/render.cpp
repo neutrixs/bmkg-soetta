@@ -15,9 +15,10 @@ void run(dpp::cluster &bot, const dpp::slashcommand_t &event) {
             return;
         }
 
-        std::string place = std::get<std::string>(event.get_parameter("place"));
+        std::string place;
         bool ignore_old;
         try {
+            place = std::get<std::string>(event.get_parameter("place"));
             ignore_old = std::get<bool>(event.get_parameter("ignore_old"));
         } catch (std::bad_variant_access &e) {
             ignore_old = false;
