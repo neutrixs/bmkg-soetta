@@ -53,7 +53,13 @@ cv::Mat radar::Imagery::render(int width, int height) {
 
         std::vector<uchar> buffer(content.begin(), content.end());
 
-        cv::Mat image = cv::imdecode(buffer, cv::IMREAD_UNCHANGED);
+        cv::Mat image;
+        try {
+            image = cv::imdecode(buffer, cv::IMREAD_UNCHANGED);
+        } catch (cv::Exception &e) {
+            std::string err = e.what();
+            throw std::runtime_error("OpenCV error: " + err);
+        }
 
         int radar_width = image.cols, radar_height = image.rows;
 
@@ -231,9 +237,9 @@ std::vector<radar::RadarImage> &radar::Imagery::get_radar_datas() {
 
         req.perform();
     } catch (curlpp::RuntimeError &e) {
-        std::cerr << e.what() << std::endl;
+        throw std::runtime_error(e.what());
     } catch (curlpp::LogicError &e) {
-        std::cerr << e.what() << std::endl;
+        throw std::runtime_error(e.what());
     }
 
     std::string content = response.str();
@@ -244,7 +250,8 @@ std::vector<radar::RadarImage> &radar::Imagery::get_radar_datas() {
     try {
         list_data = json::parse(content);
     } catch (const json::parse_error &e) {
-        std::cerr << "Error parsing JSON: " << e.what() << std::endl;
+        std::string err(e.what());
+        throw std::runtime_error("Error parsing JSON: " + err);
     }
 
     for (auto &radar : list_data) {
@@ -325,9 +332,9 @@ void radar::Imagery::fetch_detailed_data(std::string code, std::mutex &mtx) {
 
         req.perform();
     } catch (curlpp::RuntimeError &e) {
-        std::cerr << e.what() << std::endl;
+        throw std::runtime_error(e.what());
     } catch (curlpp::LogicError &e) {
-        std::cerr << e.what() << std::endl;
+        throw std::runtime_error(e.what());
     }
 
     std::string content = response.str();
@@ -336,7 +343,13 @@ void radar::Imagery::fetch_detailed_data(std::string code, std::mutex &mtx) {
     try {
         parsed_data = json::parse(content);
     } catch (const json::parse_error &e) {
-        std::cerr << "Error parsing JSON: " << e.what() << std::endl;
+        std::string err(e.what());
+        throw std::runtime_error("Error parsing JSON: " + err);
+    }
+
+    if (parsed_data.is_null()) {
+        std::string URL = token == "" ? radar::RADAR_IMAGE_PUBLIC_API_URL : radar::RADAR_IMAGE_API_URL;
+        throw std::runtime_error("API " + URL + " returned NULL");
     }
 
     radar::RadarImage radar_data;
@@ -402,9 +415,9 @@ void radar::Imagery::download(std::vector<std::string> *raw_images, RadarImage &
 
         req.perform();
     } catch (curlpp::RuntimeError &e) {
-        std::cerr << e.what() << std::endl;
+        throw std::runtime_error(e.what());
     } catch (curlpp::LogicError &e) {
-        std::cerr << e.what() << std::endl;
+        throw std::runtime_error(e.what());
     }
 
     std::string content = response.str();

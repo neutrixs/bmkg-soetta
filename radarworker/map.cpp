@@ -160,9 +160,9 @@ void map::Tiles::download_each(
 
             req.perform();
         } catch (curlpp::RuntimeError &e) {
-            std::cerr << e.what() << std::endl;
+            throw std::runtime_error(e.what());
         } catch (curlpp::LogicError &e) {
-            std::cerr << e.what() << std::endl;
+            throw std::runtime_error(e.what());
         }
 
         data = response.str();
@@ -281,9 +281,9 @@ std::array<double, 4> map::OSM_get_bounding_box(std::string place) {
 
         req.perform();
     } catch (curlpp::RuntimeError &e) {
-        std::cerr << e.what() << std::endl;
+        throw std::runtime_error(e.what());
     } catch (curlpp::LogicError &e) {
-        std::cerr << e.what() << std::endl;
+        throw std::runtime_error(e.what());
     }
 
     std::string content = response.str();
@@ -292,13 +292,14 @@ std::array<double, 4> map::OSM_get_bounding_box(std::string place) {
     try {
         API_data = json::parse(content);
     } catch (const json::parse_error &e) {
-        std::cerr << "Error parsing JSON: " << e.what() << std::endl;
+        std::string err(e.what());
+        throw std::runtime_error("Error parsing JSON: " + err);
     }
 
     std::array<double, 4> bounding_box{0.0, 0.0, 0.0, 0.0};
     if (API_data.size() == 0) {
-        std::cerr << "Not found" << std::endl;
-        return bounding_box;
+        std::string err = "Place " + place + " not found";
+        throw std::runtime_error(err);
     }
 
     for (int i = 0; i < API_data.size(); i++) {
