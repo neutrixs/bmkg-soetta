@@ -5,6 +5,7 @@ set (
     SOURCES
     "main.cpp"
     "command_manager.cpp"
+    "commands/render.cpp"
 )
 
 include_directories("../include")

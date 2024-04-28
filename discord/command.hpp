@@ -8,7 +8,7 @@ struct command {
     std::string name;
     std::string description;
     std::vector<dpp::command_option> options;
-    void run(dpp::cluster &bot, dpp::slashcommand_t &event);
+    std::function<void(dpp::cluster &bot, const dpp::slashcommand_t &event)> run;
 };
 
 #endif
