@@ -12,10 +12,11 @@ include_directories("../include")
 
 add_executable(RadarWorker main.cpp ${SOURCES})
 add_library(radarworker STATIC ${SOURCES})
-set_target_properties(radarworker PROPERTIES PUBLIC_HEADER "../include/radarworker/radarworker.hpp")
 
 include(GNUInstallDirs)
-install(TARGETS radarworker LIBRARY DESTINATION ${CMAKE_INSTALL_LIBDIR} PUBLIC_HEADER DESTINATION ${CMAKE_INSTALL_INCLUDEDIR})
+install(TARGETS radarworker LIBRARY DESTINATION ${CMAKE_INSTALL_LIBDIR})
+install(DIRECTORY ../include/radarworker
+        DESTINATION ${CMAKE_INSTALL_INCLUDEDIR})
 
 configure_file(radarworker.pc.in radarworker.pc @ONLY)
 install(FILES ${CMAKE_BINARY_DIR}/radarworker.pc DESTINATION ${CMAKE_INSTALL_DATAROOTDIR}/pkgconfig)
