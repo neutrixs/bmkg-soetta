@@ -22,9 +22,20 @@ void register_commands(dpp::cluster &bot) {
         commands_list.push_back(cmd_data);
     }
 
-    // TODO: check if we need to actually register the commands
-    bot.global_bulk_command_delete_sync();
-    bot.global_bulk_command_create_sync(commands_list);
+    // delete command if it doesn't exist locally
+    auto existing_commands = bot.global_commands_get_sync();
+    for (auto &existing_command : existing_commands) {
+        std::string name = existing_command.second.name;
+        try {
+            GlobalCommandManager.get_command(name);
+        } catch (std::runtime_error &e) {
+            bot.global_command_delete_sync(existing_command.first);
+        }
+    }
+
+    for (auto &cmd : commands_list) {
+        bot.global_command_create(cmd);
+    }
 }
 
 int main() {
