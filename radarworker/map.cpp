@@ -175,7 +175,7 @@ void map::Tiles::download_each(
     (*tiles_images).at(pos) = data;
 }
 
-cv::Mat map::Tiles::render_with_overlay_radar(radar::Imagery imagery, float map_brightness, float radar_opacity) {
+cv::Mat map::Tiles::render_with_overlay_radar(radar::Imagery &imagery, float map_brightness, float radar_opacity) {
     cv::Mat base_map = render();
     for (int row = 0; row < base_map.rows; row++) {
         for (int col = 0; col < base_map.cols; col++) {

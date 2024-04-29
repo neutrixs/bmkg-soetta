@@ -47,6 +47,8 @@ cv::Mat radar::Imagery::render(int width, int height) {
         job.join();
     }
 
+    std::vector<RadarImage *> used_radars_local;
+
     for (int i = 0; i < raw_images.size(); i++) {
         auto d = radars.at(i);
         auto content = raw_images.at(i);
@@ -162,6 +164,8 @@ cv::Mat radar::Imagery::render(int width, int height) {
             }
         }
 
+        bool radar_used_atleast_once = false;
+
         for (int y = 0; y < roi_height; y += check_radar_dist_every_px) {
             for (int x = 0; x < roi_width; x += check_radar_dist_every_px) {
                 int width_current = std::min(check_radar_dist_every_px, roi_width - x);
@@ -207,10 +211,17 @@ cv::Mat radar::Imagery::render(int width, int height) {
                     cv::Mat container_roi_current = container_roi(cv::Rect(x, y, width_current, height_current));
 
                     image_roi_current.copyTo(container_roi_current);
+                    radar_used_atleast_once = true;
                 }
             }
         }
+
+        if (radar_used_atleast_once) {
+            used_radars_local.push_back(&d);
+        }
     }
+
+    used_radars = used_radars_local;
 
     return container;
 }

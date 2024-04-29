@@ -51,6 +51,8 @@ class Imagery {
     bool ignore_old_radars = false;
     bool stripe_on_old_radars = true;
 
+    std::vector<RadarImage *> used_radars;
+
     int zoom_level = 13;
     int check_radar_dist_every_px = 50;
     std::vector<std::string> exclude_radar;
