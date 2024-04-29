@@ -47,7 +47,7 @@ cv::Mat radar::Imagery::render(int width, int height) {
         job.join();
     }
 
-    std::vector<RadarImage *> used_radars_local;
+    used_radars.clear();
 
     for (int i = 0; i < raw_images.size(); i++) {
         auto d = radars.at(i);
@@ -217,11 +217,10 @@ cv::Mat radar::Imagery::render(int width, int height) {
         }
 
         if (radar_used_atleast_once) {
-            used_radars_local.push_back(&d);
+            // lesson learned: do not create a pointer to a reference, it's gonna be... weird
+            used_radars.push_back(&(radars[i]));
         }
     }
-
-    used_radars = used_radars_local;
 
     return container;
 }

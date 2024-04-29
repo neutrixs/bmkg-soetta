@@ -8,6 +8,41 @@
 
 namespace commands {
 namespace render {
+static std::string write_info(radar::Imagery &imagery) {
+    std::string output;
+    size_t count = imagery.used_radars.size();
+    switch (count) {
+    case 0:
+        output += "No radars used. Likely out of bounds or outdated datas.";
+        break;
+    case 1:
+        output += "Used radar:\n";
+        break;
+    default:
+        output += "Used radars:\n";
+        break;
+    }
+
+    for (auto &radar : imagery.used_radars) {
+        std::string name = radar->stasiun;
+        auto time = radar->data.time.back().time_since_epoch();
+        long epoch = std::chrono::duration_cast<std::chrono::seconds>(time).count();
+
+        std::string not_enough = "\netc...";
+        std::string format = name + ": <t:" + std::to_string(epoch) + ":R>\n";
+
+        // discord character limit
+        if (output.size() + format.size() + not_enough.size() <= 2000) {
+            output += format;
+        } else {
+            output += not_enough;
+            break;
+        }
+    }
+
+    return output;
+}
+
 void run(dpp::cluster &bot, const dpp::slashcommand_t &event) {
     event.thinking(false, [event](const dpp::confirmation_callback_t &callback) {
         if (callback.is_error()) {
@@ -41,7 +76,7 @@ void run(dpp::cluster &bot, const dpp::slashcommand_t &event) {
         std::vector<uchar> buf;
         cv::imencode(".png", image, buf);
 
-        dpp::message msg("");
+        dpp::message msg(write_info(imagery));
         msg.set_file_content(std::string(buf.begin(), buf.end()));
         msg.set_filename("radar.png");
 
