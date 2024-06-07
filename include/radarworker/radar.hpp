@@ -54,7 +54,7 @@ class Imagery {
     std::vector<RadarImage *> used_radars;
 
     int zoom_level = 13;
-    int check_radar_dist_every_px = 50;
+    int check_radar_dist_every_px = 10;
     std::vector<std::string> exclude_radar;
 
     cv::Mat render(int width, int height);
