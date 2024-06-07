@@ -72,7 +72,15 @@ void run(dpp::cluster &bot, const dpp::slashcommand_t &event) {
         imagery.exclude_radar = {"CGK"};
         imagery.ignore_old_radars = ignore_old;
 
-        cv::Mat image = tiles.render_with_overlay_radar(imagery);
+        cv::Mat image;
+
+        try {
+            image = tiles.render_with_overlay_radar(imagery);
+        } catch (std::runtime_error &e) {
+            dpp::message msg(e.what());
+            event.edit_original_response(msg);
+            return;
+        }
 
         std::vector<uchar> buf;
         cv::imencode(".png", image, buf);
