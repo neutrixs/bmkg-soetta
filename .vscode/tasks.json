@@ -2,47 +2,38 @@
     "version": "2.0.0",
     "tasks": [
         {
-            "label": "build",
+            "label": "build-radar",
             "type": "shell",
-            "command": "cmake --preset Ninja-Release-x64 && cd build/Ninja-Release-x64 && ninja",
+            "command": "cd radarworker && cmake --preset Ninja-Release-x64 && cd build/Ninja-Release-x64 && ninja",
             "group": {
                 "kind": "build",
                 "isDefault": true
-            },
-            "presentation": {
-                "reveal": "silent",
-                "revealProblems": "onProblem",
-                "close": true
             }
         },
         {
-            "label": "build-debug",
+            "label": "build-debug-radar",
             "type": "shell",
-            "command": "cmake --preset Ninja-Debug-x64 && ninja -C build/Ninja-Debug-x64",
+            "command": "cd radarworker && cmake --preset Ninja-Debug-x64 && ninja -C build/Ninja-Debug-x64",
             "group": {
                 "kind": "build"
-            },
-            "presentation": {
-                "reveal": "silent",
-                "revealProblems": "onProblem",
-                "close": true
             }
         },
         {
-            "label": "Run RadarWorker",
+            "label": "build-discord",
             "type": "shell",
-            "command": "${workspaceFolder}/build/Ninja-Release-x64/RadarWorker/RadarWorker",
+            "command": "cd discord && cmake --preset Ninja-Release-x64 && cd build/Ninja-Release-x64 && ninja",
             "group": {
                 "kind": "build",
-                "isDefault": true
-            },
-            "presentation": {
-                "reveal": "always",
-                "panel": "new"
-            },
-            "dependsOn": [
-                "build"
-            ]
+                "isDefault": false
+            }
+        },
+        {
+            "label": "build-debug-discord",
+            "type": "shell",
+            "command": "cd discord && cmake --preset Ninja-Debug-x64 && ninja -C build/Ninja-Debug-x64",
+            "group": {
+                "kind": "build"
+            }
         }
     ]
 }
