@@ -32,19 +32,37 @@ cv::Mat radar::Imagery::render(int width, int height) {
     std::vector<radar::RadarImage> &radars = get_radar_datas();
     cv::Mat container = cv::Mat::zeros(height, width, CV_8UC4);
 
+    std::vector<bool> jobs_status;
     std::vector<std::thread> jobs;
     std::vector<std::string> raw_images(radars.size(), std::string());
     std::mutex mtx;
 
+    int count = 0;
     for (int i = 0; i < radars.size(); i++) {
         auto &d = radars.at(i);
-        std::thread job([this, &raw_images, &d, i, &mtx] { this->download(&raw_images, d, i, mtx); });
+
+        jobs_status.push_back(false);
+        auto js = &jobs_status;
+
+        std::thread job([this, &raw_images, &d, i, &mtx, js, count] { this->download(&raw_images, d, i, mtx, js, count); });
 
         jobs.push_back(std::move(job));
+        count++;
     }
 
-    for (auto &job : jobs) {
-        job.join();
+    auto start_time = std::chrono::high_resolution_clock::now();
+    for (int i = 0; i < jobs.size(); i++) {
+        while (!jobs_status.at(i)) {
+            std::this_thread::sleep_for(std::chrono::milliseconds(10));
+            auto end_time = std::chrono::high_resolution_clock::now();
+            auto elapsed = std::chrono::duration_cast<std::chrono::milliseconds>(end_time - start_time);
+
+            if (elapsed.count() > 20000) {
+                throw std::runtime_error("http request time out");
+            }
+        }
+
+        jobs.at(i).join();
     }
 
     used_radars.clear();
@@ -306,9 +324,11 @@ std::vector<radar::RadarImage> &radar::Imagery::get_radar_datas() {
         list.push_back(radar_data);
     }
 
+    std::vector<bool> jobs_status;
     std::vector<std::thread> jobs;
     std::mutex mtx;
 
+    int count = 0;
     for (auto &radar : list) {
         // excluded radar
         if (std::find(exclude_radar.begin(), exclude_radar.end(), radar.kode) != exclude_radar.end())
@@ -320,18 +340,34 @@ std::vector<radar::RadarImage> &radar::Imagery::get_radar_datas() {
 
         std::string code = radar.kode;
 
-        std::thread job([this, code, &mtx] { this->fetch_detailed_data(code, mtx); });
+        jobs_status.push_back(false);
+        auto js = &jobs_status;
+
+        std::thread job([this, code, &mtx, js, count] { this->fetch_detailed_data(code, mtx, js, count); });
         jobs.push_back(std::move(job));
+
+        count++;
     }
 
-    for (auto &job : jobs) {
-        job.join();
+    auto start_time = std::chrono::high_resolution_clock::now();
+    for (int i = 0; i < jobs.size(); i++) {
+        while (!jobs_status.at(i)) {
+            std::this_thread::sleep_for(std::chrono::milliseconds(10));
+            auto end_time = std::chrono::high_resolution_clock::now();
+            auto elapsed = std::chrono::duration_cast<std::chrono::milliseconds>(end_time - start_time);
+
+            if (elapsed.count() > 20000) {
+                throw std::runtime_error("http request time out");
+            }
+        }
+
+        jobs.at(i).join();
     }
 
     return radar_datas;
 }
 
-void radar::Imagery::fetch_detailed_data(std::string code, std::mutex &mtx) {
+void radar::Imagery::fetch_detailed_data(std::string code, std::mutex &mtx, std::vector<bool> *jobs_status, int index) {
     char *token_get = std::getenv("token");
     std::string token = std::string(token_get == NULL ? "" : token_get);
 
@@ -421,10 +457,12 @@ void radar::Imagery::fetch_detailed_data(std::string code, std::mutex &mtx) {
     radar_data.data.time = time;
     mtx.lock();
     radar_datas.push_back(radar_data);
+    (*jobs_status)[index] = true;
     mtx.unlock();
 }
 
-void radar::Imagery::download(std::vector<std::string> *raw_images, RadarImage &d, int pos, std::mutex &mtx) {
+void radar::Imagery::download(
+    std::vector<std::string> *raw_images, RadarImage &d, int pos, std::mutex &mtx, std::vector<bool> *jobs_status, int index) {
     curlpp::initialize();
     std::stringstream response;
 
@@ -449,5 +487,6 @@ void radar::Imagery::download(std::vector<std::string> *raw_images, RadarImage &
     std::string content = response.str();
     mtx.lock();
     (*raw_images).at(pos) = content;
+    (*jobs_status)[index] = true;
     mtx.unlock();
 }
