@@ -8,8 +8,8 @@
             "name": "(gdb) Launch",
             "type": "cppdbg",
             "request": "launch",
-            "program": "${workspaceFolder}/build/Ninja-Debug-x64/RadarWorker/RadarWorker",
-            "args": [],
+            "program": "${workspaceFolder}/radarworker/build/Ninja-Debug-x64/RadarWorker",
+            "args": ["TEST_COULD_BE_ANYTHING"],
             "stopAtEntry": false,
             "cwd": "${workspaceFolder}",
             "environment": [],
@@ -27,7 +27,7 @@
                     "ignoreFailures": true
                 }
             ],
-            "preLaunchTask": "build-debug"
+            "preLaunchTask": "build-debug-radar"
         }
 
     ]
