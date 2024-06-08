@@ -21,8 +21,8 @@ class Tiles {
     }
     int zoom_level;
     cv::Mat render();
-    void download_each(
-        std::vector<std::string> *tiles_images, int tiles_x, int tiles_y, boost::filesystem::path usr_tempdir, int pos);
+    void download_each(std::vector<std::string> *tiles_images, int tiles_x, int tiles_y, boost::filesystem::path usr_tempdir,
+        int pos, std::mutex &mtx, std::string &runtime_error);
     cv::Mat render_with_overlay_radar(float map_brightness = 0.7f, float radar_opacity = 0.6f);
     cv::Mat render_with_overlay_radar(radar::Imagery &imagery, float map_brightness = 0.7f, float radar_opacity = 0.6f);
     int MAX_APPROPRIATE_TILES = 50;

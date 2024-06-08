@@ -4,12 +4,15 @@
 #include <curlpp/Options.hpp>
 #include <curlpp/cURLpp.hpp>
 #include <iostream>
+#include <mutex>
 #include <nlohmann/json.hpp>
 #include <opencv2/opencv.hpp>
+#include <radarworker/fetch.hpp>
 #include <radarworker/map.hpp>
 #include <radarworker/png.hpp>
 #include <radarworker/radar.hpp>
 #include <sstream>
+#include <thread>
 #include <vector>
 
 namespace fs = boost::filesystem;
@@ -43,11 +46,13 @@ cv::Mat map::Tiles::render() {
     fs::create_directories(usr_tempdir);
 
     std::vector<std::thread> jobs;
+    std::mutex mtx;
+    std::string runtime_error;
 
     for (int tiles_y = range_north_approx, dl_count = 0; tiles_y < range_south_approx; tiles_y++) {
         for (int tiles_x = range_west_approx; tiles_x < range_east_approx; tiles_x++, dl_count++) {
-            std::thread job([this, &tiles_images, tiles_x, tiles_y, usr_tempdir, dl_count] {
-                this->download_each(&tiles_images, tiles_x, tiles_y, usr_tempdir, dl_count);
+            std::thread job([this, &tiles_images, tiles_x, tiles_y, usr_tempdir, dl_count, &mtx, &runtime_error] {
+                this->download_each(&tiles_images, tiles_x, tiles_y, usr_tempdir, dl_count, mtx, runtime_error);
             });
 
             jobs.push_back(std::move(job));
@@ -55,7 +60,13 @@ cv::Mat map::Tiles::render() {
     }
 
     for (auto &job : jobs) {
-        job.join();
+        if (job.joinable()) {
+            job.join();
+        }
+    }
+
+    if (runtime_error != "") {
+        throw std::runtime_error(runtime_error);
     }
 
     // get resolution of the first one as a reference
@@ -104,8 +115,8 @@ cv::Mat map::Tiles::render() {
     return cropped_canvas_alpha;
 }
 
-void map::Tiles::download_each(
-    std::vector<std::string> *tiles_images, int tiles_x, int tiles_y, fs::path usr_tempdir, int pos) {
+void map::Tiles::download_each(std::vector<std::string> *tiles_images, int tiles_x, int tiles_y, fs::path usr_tempdir, int pos,
+    std::mutex &mtx, std::string &runtime_error) {
 
     std::string URL_SCHEME = OSM_TILES_BASE_URL + std::to_string(zoom_level) + "/" + std::to_string(tiles_x) + "/" +
         std::to_string(tiles_y) + ".png";
@@ -132,12 +143,6 @@ void map::Tiles::download_each(
         cache_file.close();
     } else {
     redownload:
-        // TODO: handle exception
-        curlpp::initialize();
-        std::stringstream response;
-
-        // fake headers to bypass the limitation
-        // this is enough
         std::list<std::string> headers;
         headers.push_back("User-Agent: Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
                           "AppleWebKit/537.36 (KHTML, like Gecko) Chrome/123.0.0.0 "
@@ -150,29 +155,18 @@ void map::Tiles::download_each(
                           "\"Chromium\";v=\"123\"");
 
         try {
-            curlpp::Easy req;
-
-            req.setOpt(new curlpp::options::Url(URL_SCHEME));
-            req.setOpt(new curlpp::options::HttpHeader(headers));
-
-            curlpp::options::WriteStream write(&response);
-            req.setOpt(write);
-
-            req.perform();
-        } catch (curlpp::RuntimeError &e) {
-            throw std::runtime_error(e.what());
-        } catch (curlpp::LogicError &e) {
-            throw std::runtime_error(e.what());
+            data = fetch::get(URL_SCHEME, headers);
+        } catch (std::runtime_error &e) {
+            runtime_error = e.what();
         }
-
-        data = response.str();
-
         std::ofstream output_file(PATH_SCHEME, std::ios::binary);
         output_file.write(data.c_str(), data.size());
         output_file.close();
     }
 
+    mtx.lock();
     (*tiles_images).at(pos) = data;
+    mtx.unlock();
 }
 
 cv::Mat map::Tiles::render_with_overlay_radar(radar::Imagery &imagery, float map_brightness, float radar_opacity) {
@@ -257,9 +251,6 @@ std::array<double, 2> map::Tiles::tile_to_coord(double x, double y, int zoom) {
 std::array<double, 4> map::OSM_get_bounding_box(std::string place) {
     std::string URL = OSM_NOMINATIM_SEARCH_BASE_URL + "?q=" + cURLpp::escape(place) + "&format=json";
 
-    curlpp::initialize();
-    std::stringstream response;
-
     std::list<std::string> 👺👺👺👺👺;
     👺👺👺👺👺.push_back("User-Agent: Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
                          "AppleWebKit/537.36 (KHTML, like Gecko) Chrome/123.0.0.0 "
@@ -271,22 +262,7 @@ std::array<double, 4> map::OSM_get_bounding_box(std::string place) {
     👺👺👺👺👺.push_back("Sec-Ch-Ua: \"Google Chrome\";v=\"123\", \"Not:A-Brand\";v=\"8\", "
                          "\"Chromium\";v=\"123\"");
 
-    try {
-        curlpp::Easy req;
-        req.setOpt(new curlpp::options::Url(URL));
-        req.setOpt(new curlpp::options::HttpHeader(👺👺👺👺👺));
-
-        curlpp::options::WriteStream write(&response);
-        req.setOpt(write);
-
-        req.perform();
-    } catch (curlpp::RuntimeError &e) {
-        throw std::runtime_error(e.what());
-    } catch (curlpp::LogicError &e) {
-        throw std::runtime_error(e.what());
-    }
-
-    std::string content = response.str();
+    std::string content = fetch::get(URL, 👺👺👺👺👺);
     json API_data;
 
     try {

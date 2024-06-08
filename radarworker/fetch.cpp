@@ -7,7 +7,7 @@
 #include <sstream>
 #include <thread>
 
-std::string fetch::get(std::string url) {
+std::string fetch::get(std::string url, std::list<std::string> headers) {
     curlpp::initialize();
     std::stringstream response;
     std::stringstream *rp = &response;
@@ -18,7 +18,7 @@ std::string fetch::get(std::string url) {
     bool done = false;
     bool *dp = &done;
 
-    std::thread job([url, rp, re, dp] {
+    std::thread job([url, rp, re, dp, headers] {
         try {
             curlpp::Easy req;
             req.setOpt(new curlpp::options::Url(url));
@@ -27,6 +27,7 @@ std::string fetch::get(std::string url) {
             // whatever, i don't care
             req.setOpt(new curlpp::options::SslVerifyPeer(false));
             req.setOpt(new curlpp::options::SslVerifyHost(false));
+            req.setOpt(new curlpp::options::HttpHeader(headers));
 
             curlpp::options::WriteStream write(rp);
             req.setOpt(write);
