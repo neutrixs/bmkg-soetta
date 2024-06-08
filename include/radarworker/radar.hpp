@@ -87,9 +87,7 @@ class Imagery {
     std::array<double, 4> boundaries;
     std::vector<RadarImage> radar_datas;
     std::vector<RadarImage> &get_radar_datas();
-    void fetch_detailed_data(std::string code, std::mutex &mtx, std::vector<bool> *jobs_status, int index);
-    void download(std::vector<std::string> *raw_images, RadarImage &d, int pos, std::mutex &mtx, std::vector<bool> *jobs_status,
-        int index);
+    void fetch_detailed_data(std::string code, std::mutex &mtx, std::string &runtime_error, int index);
 };
 
 } // namespace radar

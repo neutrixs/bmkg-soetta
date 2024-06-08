@@ -6,6 +6,7 @@
 #include <iostream>
 #include <nlohmann/json.hpp>
 #include <radar_debug/debug.h>
+#include <radarworker/fetch.hpp>
 #include <radarworker/radar.hpp>
 #include <thread>
 
@@ -32,37 +33,40 @@ cv::Mat radar::Imagery::render(int width, int height) {
     std::vector<radar::RadarImage> &radars = get_radar_datas();
     cv::Mat container = cv::Mat::zeros(height, width, CV_8UC4);
 
-    std::vector<bool> jobs_status;
     std::vector<std::thread> jobs;
     std::vector<std::string> raw_images(radars.size(), std::string());
     std::mutex mtx;
 
-    int count = 0;
+    std::string runtime_error("");
+
     for (int i = 0; i < radars.size(); i++) {
         auto &d = radars.at(i);
 
-        jobs_status.push_back(false);
-        auto js = &jobs_status;
-
-        std::thread job([this, &raw_images, &d, i, &mtx, js, count] { this->download(&raw_images, d, i, mtx, js, count); });
+        std::thread job([this, &raw_images, &d, i, &mtx, &runtime_error] {
+            mtx.lock();
+            std::string url = d.data.file.back();
+            mtx.unlock();
+            try {
+                std::string content = fetch::get(url);
+                mtx.lock();
+                raw_images.at(i) = content;
+                mtx.unlock();
+            } catch (std::runtime_error &e) {
+                runtime_error = e.what();
+            }
+        });
 
         jobs.push_back(std::move(job));
-        count++;
     }
 
-    auto start_time = std::chrono::high_resolution_clock::now();
-    for (int i = 0; i < jobs.size(); i++) {
-        while (!jobs_status.at(i)) {
-            std::this_thread::sleep_for(std::chrono::milliseconds(10));
-            auto end_time = std::chrono::high_resolution_clock::now();
-            auto elapsed = std::chrono::duration_cast<std::chrono::milliseconds>(end_time - start_time);
-
-            if (elapsed.count() > 20000) {
-                throw std::runtime_error("http request time out");
-            }
+    for (auto &job : jobs) {
+        if (job.joinable()) {
+            job.join();
         }
+    }
 
-        jobs.at(i).join();
+    if (runtime_error != "") {
+        throw std::runtime_error(runtime_error);
     }
 
     used_radars.clear();
@@ -287,29 +291,7 @@ std::vector<radar::RadarImage> &radar::Imagery::get_radar_datas() {
         return radar_datas;
     }
 
-    curlpp::initialize();
-    std::stringstream response;
-
-    try {
-        curlpp::Easy req;
-        req.setOpt(new curlpp::options::Url(RADAR_LIST_API_URL));
-
-        // well, it seems like it doesn't recognize ssl certificate on non-443 port
-        // whatever, i don't care
-        req.setOpt(new curlpp::options::SslVerifyPeer(false));
-        req.setOpt(new curlpp::options::SslVerifyHost(false));
-
-        curlpp::options::WriteStream write(&response);
-        req.setOpt(write);
-
-        req.perform();
-    } catch (curlpp::RuntimeError &e) {
-        throw std::runtime_error(e.what());
-    } catch (curlpp::LogicError &e) {
-        throw std::runtime_error(e.what());
-    }
-
-    std::string content = response.str();
+    std::string content = fetch::get(RADAR_LIST_API_URL);
 
     std::vector<radar::RadarList> list;
 
@@ -347,7 +329,7 @@ std::vector<radar::RadarImage> &radar::Imagery::get_radar_datas() {
         list.push_back(radar_data);
     }
 
-    std::vector<bool> jobs_status;
+    std::string runtime_error("");
     std::vector<std::thread> jobs;
     std::mutex mtx;
 
@@ -363,28 +345,17 @@ std::vector<radar::RadarImage> &radar::Imagery::get_radar_datas() {
 
         std::string code = radar.kode;
 
-        jobs_status.push_back(false);
-        auto js = &jobs_status;
-
-        std::thread job([this, code, &mtx, js, count] { this->fetch_detailed_data(code, mtx, js, count); });
+        std::thread job(
+            [this, code, &mtx, &runtime_error, count] { this->fetch_detailed_data(code, mtx, runtime_error, count); });
         jobs.push_back(std::move(job));
 
         count++;
     }
 
-    auto start_time = std::chrono::high_resolution_clock::now();
-    for (int i = 0; i < jobs.size(); i++) {
-        while (!jobs_status.at(i)) {
-            std::this_thread::sleep_for(std::chrono::milliseconds(10));
-            auto end_time = std::chrono::high_resolution_clock::now();
-            auto elapsed = std::chrono::duration_cast<std::chrono::milliseconds>(end_time - start_time);
-
-            if (elapsed.count() > 20000) {
-                throw std::runtime_error("http request time out");
-            }
+    for (auto &job : jobs) {
+        if (job.joinable()) {
+            job.join();
         }
-
-        jobs.at(i).join();
     }
 
     return radar_datas;
@@ -405,7 +376,7 @@ radar::Color radar::parseHexColor(const std::string &hexColor) {
     return color;
 }
 
-void radar::Imagery::fetch_detailed_data(std::string code, std::mutex &mtx, std::vector<bool> *jobs_status, int index) {
+void radar::Imagery::fetch_detailed_data(std::string code, std::mutex &mtx, std::string &runtime_error, int index) {
     char *token_get = std::getenv("token");
     std::string token = std::string(token_get == NULL ? "" : token_get);
 
@@ -416,35 +387,22 @@ void radar::Imagery::fetch_detailed_data(std::string code, std::mutex &mtx, std:
         URL += "&token=" + curlpp::escape(token);
     }
 
-    curlpp::initialize();
-    std::stringstream response;
+    std::string content;
 
     try {
-        curlpp::Easy req;
-        req.setOpt(new curlpp::options::Url(URL));
-        // well, it seems like it doesn't recognize ssl certificate on non-443 port
-        // whatever, i don't care
-        req.setOpt(new curlpp::options::SslVerifyPeer(false));
-        req.setOpt(new curlpp::options::SslVerifyHost(false));
-
-        curlpp::options::WriteStream write(&response);
-        req.setOpt(write);
-
-        req.perform();
-    } catch (curlpp::RuntimeError &e) {
-        throw std::runtime_error(e.what());
-    } catch (curlpp::LogicError &e) {
-        throw std::runtime_error(e.what());
+        content = fetch::get(URL);
+    } catch (std::runtime_error &e) {
+        runtime_error = e.what();
+        return;
     }
-
-    std::string content = response.str();
 
     json parsed_data;
     try {
         parsed_data = json::parse(content);
     } catch (const json::parse_error &e) {
         std::string err(e.what());
-        throw std::runtime_error("Error parsing JSON: " + err);
+        runtime_error = ("Error parsing JSON: " + err);
+        return;
     }
 
     if (parsed_data.is_null()) {
@@ -499,36 +457,5 @@ void radar::Imagery::fetch_detailed_data(std::string code, std::mutex &mtx, std:
     radar_data.data.time = time;
     mtx.lock();
     radar_datas.push_back(radar_data);
-    (*jobs_status)[index] = true;
-    mtx.unlock();
-}
-
-void radar::Imagery::download(
-    std::vector<std::string> *raw_images, RadarImage &d, int pos, std::mutex &mtx, std::vector<bool> *jobs_status, int index) {
-    curlpp::initialize();
-    std::stringstream response;
-
-    try {
-        curlpp::Easy req;
-        mtx.lock();
-        std::string url = d.data.file.back();
-        mtx.unlock();
-
-        req.setOpt(new curlpp::options::Url(url));
-
-        curlpp::options::WriteStream write(&response);
-        req.setOpt(write);
-
-        req.perform();
-    } catch (curlpp::RuntimeError &e) {
-        throw std::runtime_error(e.what());
-    } catch (curlpp::LogicError &e) {
-        throw std::runtime_error(e.what());
-    }
-
-    std::string content = response.str();
-    mtx.lock();
-    (*raw_images).at(pos) = content;
-    (*jobs_status)[index] = true;
     mtx.unlock();
 }

@@ -42,7 +42,6 @@ std::string fetch::get(std::string url) {
 
     auto start_time = std::chrono::high_resolution_clock::now();
     while (true) {
-        std::this_thread::sleep_for(std::chrono::milliseconds(10));
         auto end_time = std::chrono::high_resolution_clock::now();
         auto elapsed = std::chrono::duration_cast<std::chrono::milliseconds>(end_time - start_time);
 
@@ -52,7 +51,11 @@ std::string fetch::get(std::string url) {
 
         if (done)
             break;
+
+        std::this_thread::sleep_for(std::chrono::milliseconds(10));
     }
+
+    job.join();
 
     if (runtime_error != "") {
         throw std::runtime_error(runtime_error);

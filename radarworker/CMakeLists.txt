@@ -6,6 +6,7 @@ set (
     "map.cpp"
     "png.cpp"
     "radar.cpp"
+    "fetch.cpp"
 )
 
 include_directories("../include")
