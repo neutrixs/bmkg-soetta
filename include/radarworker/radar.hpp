@@ -12,6 +12,28 @@ constexpr char RADAR_LIST_API_URL[] = "https://radar.bmkg.go.id:8090/radarlist";
 constexpr char RADAR_IMAGE_PUBLIC_API_URL[] = "https://api-apps.bmkg.go.id/api/radar-image";
 constexpr char RADAR_IMAGE_API_URL[] = "https://radar.bmkg.go.id:8090/sidarmaimage";
 
+struct Color {
+    int r;
+    int g;
+    int b;
+};
+
+constexpr std::array<Color, 14> ColorScheme = {{
+    {173, 216, 230}, // 5-10 dBZ (Light Blue)
+    {0, 0, 255},     // 10-15 dBZ (Medium Blue)
+    {0, 0, 139},     // 15-20 dBZ (Dark Blue)
+    {0, 255, 0},     // 20-25 dBZ (Green)
+    {50, 205, 50},   // 25-30 dBZ (Lime Green)
+    {255, 255, 0},   // 30-35 dBZ (Yellow)
+    {255, 215, 0},   // 35-40 dBZ (Gold)
+    {255, 165, 0},   // 40-45 dBZ (Orange)
+    {255, 140, 0},   // 45-50 dBZ (Dark Orange)
+    {255, 0, 0},     // 50-55 dBZ (Red)
+    {139, 0, 0},     // 55-60 dBZ (Dark Red)
+    {255, 0, 255},   // 60-65 dBZ (Magenta)
+    {128, 0, 128},   // 65-70 dBZ (Purple)
+}};
+
 struct RadarList {
     std::array<double, 4> boundaries{};
     std::string kota;
@@ -34,9 +56,11 @@ struct RadarImage {
     std::string kode;
     double lat;
     double lon;
+    std::vector<Color> colors;
 };
 
 bool is_overlapping(std::array<double, 4> x, std::array<double, 4> y);
+Color parseHexColor(const std::string &hexColor);
 
 class Imagery {
   public:

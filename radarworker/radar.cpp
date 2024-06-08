@@ -256,6 +256,29 @@ cv::Mat radar::Imagery::render(int width, int height) {
         }
     }
 
+    // color scheme replace
+    for (int row = 0; row < container.rows; row++) {
+        for (int col = 0; col < container.cols; col++) {
+            cv::Vec4b &pixelValue = container.at<cv::Vec4b>(row, col);
+
+            uchar &blue = pixelValue[0];
+            uchar &green = pixelValue[1];
+            uchar &red = pixelValue[2];
+
+            for (int i = 0; i < radars.at(0).colors.size(); i++) {
+                auto c = radars.at(0).colors.at(i);
+                if (red == c.r && green == c.g && blue == c.b) {
+                    if (radar::ColorScheme.size() <= i)
+                        break;
+                    auto current = radar::ColorScheme.at(i);
+                    red = current.r;
+                    green = current.g;
+                    blue = current.b;
+                }
+            }
+        }
+    }
+
     return container;
 }
 
@@ -367,6 +390,21 @@ std::vector<radar::RadarImage> &radar::Imagery::get_radar_datas() {
     return radar_datas;
 }
 
+radar::Color radar::parseHexColor(const std::string &hexColor) {
+    radar::Color color;
+    if (hexColor[0] == '#') {
+        unsigned int rgb;
+        std::stringstream ss;
+        ss << std::hex << hexColor.substr(1);
+        ss >> rgb;
+
+        color.r = (rgb >> 16) & 0xFF;
+        color.g = (rgb >> 8) & 0xFF;
+        color.b = rgb & 0xFF;
+    }
+    return color;
+}
+
 void radar::Imagery::fetch_detailed_data(std::string code, std::mutex &mtx, std::vector<bool> *jobs_status, int index) {
     char *token_get = std::getenv("token");
     std::string token = std::string(token_get == NULL ? "" : token_get);
@@ -437,6 +475,10 @@ void radar::Imagery::fetch_detailed_data(std::string code, std::mutex &mtx, std:
     auto last_1h = parsed_data["LastOneHour"];
     std::vector<std::chrono::system_clock::time_point> time;
     std::vector<std::string> file;
+
+    for (auto &color : parsed_data["legends"]["colors"]) {
+        radar_data.colors.push_back(parseHexColor(color));
+    }
 
     for (int i = 0; i < last_1h["file"].size(); i++) {
         std::istringstream in{static_cast<std::string>(last_1h["timeUTC"][i])};
