@@ -188,22 +188,6 @@ cv::Mat radar::Imagery::render(int width, int height) {
 
         bool radar_used_atleast_once = false;
 
-        // we will only compare distances towards these radars, which are overlapping
-        std::vector<std::string> overlapping_radars;
-
-        for (int i = 0; i < radars.size(); i++) {
-            auto current = radars.at(i);
-            if (d.kode == current.kode)
-                continue;
-
-            double dist = sqrt(pow(d.lat - current.lat, 2.0) + pow(d.lon - current.lon, 2.0));
-            double two_radius = (d.lon - d.boundaries[1]) + (current.lon = current.boundaries[1]);
-
-            if (dist < two_radius) {
-                overlapping_radars.push_back(current.kode);
-            }
-        }
-
         for (int y = 0; y < roi_height; y += check_radar_dist_every_px) {
             for (int x = 0; x < roi_width; x += check_radar_dist_every_px) {
                 int width_current = std::min(check_radar_dist_every_px, roi_width - x);
