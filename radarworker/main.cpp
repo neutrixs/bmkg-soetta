@@ -23,7 +23,6 @@ int main(int argc, char **argv) {
     map::Tiles tiles(bounding_box[0], bounding_box[1], bounding_box[2], bounding_box[3]);
     radar::Imagery im;
     tiles.MAX_APPROPRIATE_TILES = 200;
-    im.check_radar_dist_every_px = 50;
     im.exclude_radar = {"CGK"};
     cv::Mat rendered = tiles.render_with_overlay_radar(im, 0.8f);
 
