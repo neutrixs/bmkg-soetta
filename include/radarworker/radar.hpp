@@ -74,6 +74,7 @@ class Imagery {
     int declare_old_after_mins = 20;
     bool ignore_old_radars = false;
     bool stripe_on_old_radars = true;
+    int max_concurrent_threads = 7;
 
     std::vector<RadarImage *> used_radars;
 
@@ -84,6 +85,8 @@ class Imagery {
     cv::Mat render(int width, int height);
 
   private:
+    void render_loop(int width, int height, std::vector<radar::RadarImage> &radars, std::vector<std::string> &raw_images,
+        cv::Mat &container, int i, std::mutex &mtx, bool *is_done);
     std::array<double, 4> boundaries;
     std::vector<RadarImage> radar_datas;
     std::vector<RadarImage> &get_radar_datas();

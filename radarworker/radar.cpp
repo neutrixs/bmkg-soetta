@@ -29,6 +29,187 @@ bool radar::is_overlapping(std::array<double, 4> x, std::array<double, 4> y) {
     return lat_overlap && lon_overlap;
 }
 
+void radar::Imagery::render_loop(int width, int height, std::vector<radar::RadarImage> &radars,
+    std::vector<std::string> &raw_images, cv::Mat &container, int i, std::mutex &mtx, bool *is_done) {
+    mtx.lock();
+    auto d = radars.at(i);
+    auto content = raw_images.at(i);
+    mtx.unlock();
+
+    std::vector<uchar> buffer(content.begin(), content.end());
+
+    cv::Mat image;
+    try {
+        image = cv::imdecode(buffer, cv::IMREAD_UNCHANGED);
+    } catch (cv::Exception &e) {
+        std::string err = e.what();
+        throw std::runtime_error("OpenCV error: " + err);
+    }
+
+    int radar_width = image.cols, radar_height = image.rows;
+
+    // crop if necessary to fit the map (approximate, obviously larger than the accurate size)
+    // we will crop it later
+    // but, image_cropx is accurate
+    // and note the new boundaries of the radar
+    double image_cropleft = (boundaries[1] - d.boundaries[1]) / (d.boundaries[3] - d.boundaries[1]) * radar_width;
+    image_cropleft = std::max(0., image_cropleft);
+    int image_cropleft_floor = floor(image_cropleft);
+
+    double image_cropright = (d.boundaries[3] - boundaries[3]) / (d.boundaries[3] - d.boundaries[1]) * radar_width;
+    image_cropright = std::max(0., image_cropright);
+    int image_cropright_floor = floor(image_cropright);
+
+    double image_croptop = (d.boundaries[0] - boundaries[0]) / (d.boundaries[0] - d.boundaries[2]) * radar_height;
+    image_croptop = std::max(0., image_croptop);
+    int image_croptop_floor = floor(image_croptop);
+
+    double image_cropbottom = (boundaries[2] - d.boundaries[2]) / (d.boundaries[0] - d.boundaries[2]) * radar_height;
+    image_cropbottom = std::max(0., image_cropbottom);
+    int image_cropbottom_floor = floor(image_cropbottom);
+
+    int image_cropwidth = radar_width - image_cropleft_floor - image_cropright_floor;
+    int image_cropheight = radar_height - image_croptop_floor - image_cropbottom_floor;
+
+    // crop the image, not creating a copy
+    cv::Mat image_crop = image(cv::Rect(image_cropleft_floor, image_croptop_floor, image_cropwidth, image_cropheight));
+    image_crop.copyTo(image);
+
+    std::array<double, 4> image_cropbounds = {
+        d.boundaries[0] - (d.boundaries[0] - d.boundaries[2]) * image_croptop / radar_height,
+        d.boundaries[1] + (d.boundaries[3] - d.boundaries[1]) * image_cropleft / radar_width,
+        d.boundaries[2] + (d.boundaries[0] - d.boundaries[2]) * image_cropbottom / radar_height,
+        d.boundaries[3] - (d.boundaries[3] - d.boundaries[1]) * image_cropright / radar_width //
+    };
+
+    // bounds for the approximated cropped image
+    std::array<double, 4> image_cropbounds_floor = {
+        d.boundaries[0] - (d.boundaries[0] - d.boundaries[2]) * image_croptop_floor / radar_height,
+        d.boundaries[1] + (d.boundaries[3] - d.boundaries[1]) * image_cropleft_floor / radar_width,
+        d.boundaries[2] + (d.boundaries[0] - d.boundaries[2]) * image_cropbottom_floor / radar_height,
+        d.boundaries[3] - (d.boundaries[3] - d.boundaries[1]) * image_cropright_floor / radar_width //
+    };
+
+    // this is where to put the image on the container
+    // points: x,y
+    std::array<int, 2> image_croppoints = {
+        static_cast<int>(width * (image_cropbounds[1] - boundaries[1]) / (boundaries[3] - boundaries[1])),
+        static_cast<int>(height * (boundaries[0] - image_cropbounds[0]) / (boundaries[0] - boundaries[2])) //
+    };
+
+    // scale (resize) the image according to width, height and boundaries
+    int scaled_width = round(width * (image_cropbounds_floor[3] - image_cropbounds_floor[1]) / (boundaries[3] - boundaries[1]));
+    int scaled_height =
+        round(height * (image_cropbounds_floor[0] - image_cropbounds_floor[2]) / (boundaries[0] - boundaries[2]));
+
+    cv::resize(image, image, cv::Size(scaled_width, scaled_height), 0, 0, cv::INTER_NEAREST);
+
+    // create image roi of the more accurate version (in some cases it will be more accurate)
+    int trim_left = round(scaled_width * (image_cropbounds[1] - image_cropbounds_floor[1]) /
+        (image_cropbounds_floor[3] - image_cropbounds_floor[1]));
+    int trim_right = round(scaled_width * (image_cropbounds_floor[3] - image_cropbounds[3]) /
+        (image_cropbounds_floor[3] - image_cropbounds_floor[1]));
+
+    int trim_top = round(scaled_height * (image_cropbounds_floor[0] - image_cropbounds[0]) /
+        (image_cropbounds_floor[0] - image_cropbounds_floor[2]));
+    int trim_bottom = round(scaled_height * (image_cropbounds[2] - image_cropbounds_floor[2]) /
+        (image_cropbounds_floor[0] - image_cropbounds_floor[2]));
+
+    // using std::min just in case slightly inaccurate calculation made it few pixels larger than what
+    // the container can hold
+    int trim_width = scaled_width - trim_left - trim_right;
+    trim_width = std::min(width - image_croppoints[0], trim_width);
+
+    int trim_height = scaled_height - trim_top - trim_bottom;
+    trim_height = std::min(height - image_croppoints[1], trim_height);
+
+    cv::Mat image_roi = image(cv::Rect(trim_left, trim_top, trim_width, trim_height));
+    mtx.lock();
+    cv::Mat container_roi = container(cv::Rect(image_croppoints[0], image_croppoints[1], trim_width, trim_height));
+    mtx.unlock();
+
+    int &roi_width = trim_width;
+    int &roi_height = trim_height;
+    int &roi_x_start = image_croppoints[0];
+    int &roi_y_start = image_croppoints[1];
+
+    // check if the radar is outdated, if it is, create striped pattern, every some px
+    const int STRIPE_EVERY_PX = 2;
+    cv::Mat empty_mask = cv::Mat::zeros(STRIPE_EVERY_PX, roi_width, CV_8UC4);
+
+    auto seconds_to_now = std::time(nullptr) - std::chrono::system_clock::to_time_t(d.data.time.back());
+
+    if (seconds_to_now > (declare_old_after_mins * 60) && stripe_on_old_radars) {
+        for (int y = 0; y < roi_height; y += STRIPE_EVERY_PX * 2) {
+            int current_height = std::min(STRIPE_EVERY_PX, roi_height - y);
+            cv::Mat empty_mask_roi = empty_mask(cv::Rect(0, 0, roi_width, current_height));
+            cv::Mat image_roi_roi = image_roi(cv::Rect(0, y, roi_width, current_height));
+            empty_mask_roi.copyTo(image_roi_roi);
+        }
+    }
+
+    bool radar_used_atleast_once = false;
+
+    for (int y = 0; y < roi_height; y += check_radar_dist_every_px) {
+        for (int x = 0; x < roi_width; x += check_radar_dist_every_px) {
+            int width_current = std::min(check_radar_dist_every_px, roi_width - x);
+            int height_current = std::min(check_radar_dist_every_px, roi_height - y);
+
+            double cen_x = roi_x_start + (2 * x + width_current) / 2.0;
+            double cen_y = roi_y_start + (2 * y + height_current) / 2.0;
+
+            double lat = boundaries[0] - (boundaries[0] - boundaries[2]) * cen_y / height;
+            double lon = boundaries[1] + (boundaries[3] - boundaries[1]) * cen_x / width;
+
+            unsigned int closest_index = 0;
+            double prev_distance = UINT_MAX;
+            double current_distance = 0;
+
+            for (int i = 0; i < radars.size(); i++) {
+                auto data = radars.at(i);
+
+                double lat_dist = abs(data.lat - lat);
+                double lon_dist = abs(data.lon - lon);
+                double dist = lat_dist * lat_dist + lon_dist * lon_dist;
+
+                if (radars.at(i).kode == d.kode) {
+                    current_distance = dist;
+                }
+
+                if (dist < prev_distance)
+                    prev_distance = dist, closest_index = i;
+            }
+
+            // if the distance difference between the closest and current radar
+            // is the same or less than check_radar_dist_every_px
+            // we can just ignore it
+            // why? you see, we loop through the distance via the radar
+            // bounds. not the map bounds, so there might be places
+            // where it'll be always empty (not good)
+
+            // in this case, we'll use the width as the reference
+            double dist = width * abs(current_distance - prev_distance) / (boundaries[3] - boundaries[1]);
+
+            if (radars.at(closest_index).kode == d.kode || dist <= check_radar_dist_every_px) {
+                cv::Mat image_roi_current = image_roi(cv::Rect(x, y, width_current, height_current));
+                mtx.lock();
+                cv::Mat container_roi_current = container_roi(cv::Rect(x, y, width_current, height_current));
+
+                image_roi_current.copyTo(container_roi_current);
+                mtx.unlock();
+                radar_used_atleast_once = true;
+            }
+        }
+    }
+
+    if (radar_used_atleast_once) {
+        // lesson learned: do not create a pointer to a reference, it's gonna be... weird
+        used_radars.push_back(&(radars[i]));
+    }
+
+    *is_done = true;
+}
+
 cv::Mat radar::Imagery::render(int width, int height) {
     std::vector<radar::RadarImage> &radars = get_radar_datas();
     cv::Mat container = cv::Mat::zeros(height, width, CV_8UC4);
@@ -71,177 +252,52 @@ cv::Mat radar::Imagery::render(int width, int height) {
 
     used_radars.clear();
 
+    struct JobData {
+        std::thread job;
+        bool done;
+    };
+
+    std::vector<JobData *> imgproc_jobs;
+
     for (int i = 0; i < raw_images.size(); i++) {
-        auto d = radars.at(i);
-        auto content = raw_images.at(i);
+        JobData *current_job = new JobData;
 
-        std::vector<uchar> buffer(content.begin(), content.end());
+        current_job->done = false;
+        bool *is_done = &(current_job->done);
 
-        cv::Mat image;
-        try {
-            image = cv::imdecode(buffer, cv::IMREAD_UNCHANGED);
-        } catch (cv::Exception &e) {
-            std::string err = e.what();
-            throw std::runtime_error("OpenCV error: " + err);
-        }
+        std::thread job([this, width, height, &radars, &raw_images, &container, i, &mtx, is_done] {
+            this->render_loop(width, height, radars, raw_images, container, i, mtx, is_done);
+        });
 
-        int radar_width = image.cols, radar_height = image.rows;
+        current_job->job = std::move(job);
 
-        // crop if necessary to fit the map (approximate, obviously larger than the accurate size)
-        // we will crop it later
-        // but, image_cropx is accurate
-        // and note the new boundaries of the radar
-        double image_cropleft = (boundaries[1] - d.boundaries[1]) / (d.boundaries[3] - d.boundaries[1]) * radar_width;
-        image_cropleft = std::max(0., image_cropleft);
-        int image_cropleft_floor = floor(image_cropleft);
+        imgproc_jobs.push_back(current_job);
 
-        double image_cropright = (d.boundaries[3] - boundaries[3]) / (d.boundaries[3] - d.boundaries[1]) * radar_width;
-        image_cropright = std::max(0., image_cropright);
-        int image_cropright_floor = floor(image_cropright);
+        // since thread is full, keep checking until there's a finished job
+        while (imgproc_jobs.size() == max_concurrent_threads) {
+            for (int job_index = 0; job_index < imgproc_jobs.size(); job_index++) {
+                auto cur = imgproc_jobs[job_index];
 
-        double image_croptop = (d.boundaries[0] - boundaries[0]) / (d.boundaries[0] - d.boundaries[2]) * radar_height;
-        image_croptop = std::max(0., image_croptop);
-        int image_croptop_floor = floor(image_croptop);
-
-        double image_cropbottom = (boundaries[2] - d.boundaries[2]) / (d.boundaries[0] - d.boundaries[2]) * radar_height;
-        image_cropbottom = std::max(0., image_cropbottom);
-        int image_cropbottom_floor = floor(image_cropbottom);
-
-        int image_cropwidth = radar_width - image_cropleft_floor - image_cropright_floor;
-        int image_cropheight = radar_height - image_croptop_floor - image_cropbottom_floor;
-
-        // crop the image, not creating a copy
-        cv::Mat image_crop = image(cv::Rect(image_cropleft_floor, image_croptop_floor, image_cropwidth, image_cropheight));
-        image_crop.copyTo(image);
-
-        std::array<double, 4> image_cropbounds = {
-            d.boundaries[0] - (d.boundaries[0] - d.boundaries[2]) * image_croptop / radar_height,
-            d.boundaries[1] + (d.boundaries[3] - d.boundaries[1]) * image_cropleft / radar_width,
-            d.boundaries[2] + (d.boundaries[0] - d.boundaries[2]) * image_cropbottom / radar_height,
-            d.boundaries[3] - (d.boundaries[3] - d.boundaries[1]) * image_cropright / radar_width //
-        };
-
-        // bounds for the approximated cropped image
-        std::array<double, 4> image_cropbounds_floor = {
-            d.boundaries[0] - (d.boundaries[0] - d.boundaries[2]) * image_croptop_floor / radar_height,
-            d.boundaries[1] + (d.boundaries[3] - d.boundaries[1]) * image_cropleft_floor / radar_width,
-            d.boundaries[2] + (d.boundaries[0] - d.boundaries[2]) * image_cropbottom_floor / radar_height,
-            d.boundaries[3] - (d.boundaries[3] - d.boundaries[1]) * image_cropright_floor / radar_width //
-        };
-
-        // this is where to put the image on the container
-        // points: x,y
-        std::array<int, 2> image_croppoints = {
-            static_cast<int>(width * (image_cropbounds[1] - boundaries[1]) / (boundaries[3] - boundaries[1])),
-            static_cast<int>(height * (boundaries[0] - image_cropbounds[0]) / (boundaries[0] - boundaries[2])) //
-        };
-
-        // scale (resize) the image according to width, height and boundaries
-        int scaled_width =
-            round(width * (image_cropbounds_floor[3] - image_cropbounds_floor[1]) / (boundaries[3] - boundaries[1]));
-        int scaled_height =
-            round(height * (image_cropbounds_floor[0] - image_cropbounds_floor[2]) / (boundaries[0] - boundaries[2]));
-
-        cv::resize(image, image, cv::Size(scaled_width, scaled_height), 0, 0, cv::INTER_NEAREST);
-
-        // create image roi of the more accurate version (in some cases it will be more accurate)
-        int trim_left = round(scaled_width * (image_cropbounds[1] - image_cropbounds_floor[1]) /
-            (image_cropbounds_floor[3] - image_cropbounds_floor[1]));
-        int trim_right = round(scaled_width * (image_cropbounds_floor[3] - image_cropbounds[3]) /
-            (image_cropbounds_floor[3] - image_cropbounds_floor[1]));
-
-        int trim_top = round(scaled_height * (image_cropbounds_floor[0] - image_cropbounds[0]) /
-            (image_cropbounds_floor[0] - image_cropbounds_floor[2]));
-        int trim_bottom = round(scaled_height * (image_cropbounds[2] - image_cropbounds_floor[2]) /
-            (image_cropbounds_floor[0] - image_cropbounds_floor[2]));
-
-        // using std::min just in case slightly inaccurate calculation made it few pixels larger than what
-        // the container can hold
-        int trim_width = scaled_width - trim_left - trim_right;
-        trim_width = std::min(width - image_croppoints[0], trim_width);
-
-        int trim_height = scaled_height - trim_top - trim_bottom;
-        trim_height = std::min(height - image_croppoints[1], trim_height);
-
-        cv::Mat image_roi = image(cv::Rect(trim_left, trim_top, trim_width, trim_height));
-        cv::Mat container_roi = container(cv::Rect(image_croppoints[0], image_croppoints[1], trim_width, trim_height));
-
-        int &roi_width = trim_width;
-        int &roi_height = trim_height;
-        int &roi_x_start = image_croppoints[0];
-        int &roi_y_start = image_croppoints[1];
-
-        // check if the radar is outdated, if it is, create striped pattern, every some px
-        const int STRIPE_EVERY_PX = 2;
-        cv::Mat empty_mask = cv::Mat::zeros(STRIPE_EVERY_PX, roi_width, CV_8UC4);
-
-        auto seconds_to_now = std::time(nullptr) - std::chrono::system_clock::to_time_t(d.data.time.back());
-
-        if (seconds_to_now > (declare_old_after_mins * 60) && stripe_on_old_radars) {
-            for (int y = 0; y < roi_height; y += STRIPE_EVERY_PX * 2) {
-                int current_height = std::min(STRIPE_EVERY_PX, roi_height - y);
-                cv::Mat empty_mask_roi = empty_mask(cv::Rect(0, 0, roi_width, current_height));
-                cv::Mat image_roi_roi = image_roi(cv::Rect(0, y, roi_width, current_height));
-                empty_mask_roi.copyTo(image_roi_roi);
-            }
-        }
-
-        bool radar_used_atleast_once = false;
-
-        for (int y = 0; y < roi_height; y += check_radar_dist_every_px) {
-            for (int x = 0; x < roi_width; x += check_radar_dist_every_px) {
-                int width_current = std::min(check_radar_dist_every_px, roi_width - x);
-                int height_current = std::min(check_radar_dist_every_px, roi_height - y);
-
-                double cen_x = roi_x_start + (2 * x + width_current) / 2.0;
-                double cen_y = roi_y_start + (2 * y + height_current) / 2.0;
-
-                double lat = boundaries[0] - (boundaries[0] - boundaries[2]) * cen_y / height;
-                double lon = boundaries[1] + (boundaries[3] - boundaries[1]) * cen_x / width;
-
-                unsigned int closest_index = 0;
-                double prev_distance = UINT_MAX;
-                double current_distance = 0;
-
-                for (int i = 0; i < radars.size(); i++) {
-                    auto data = radars.at(i);
-
-                    double lat_dist = abs(data.lat - lat);
-                    double lon_dist = abs(data.lon - lon);
-                    double dist = lat_dist * lat_dist + lon_dist * lon_dist;
-
-                    if (radars.at(i).kode == d.kode) {
-                        current_distance = dist;
+                // when it's done, join the thread, and delete it from imgproc_Jobs
+                if (cur->done) {
+                    if (cur->job.joinable()) {
+                        cur->job.join();
                     }
 
-                    if (dist < prev_distance)
-                        prev_distance = dist, closest_index = i;
-                }
-
-                // if the distance difference between the closest and current radar
-                // is the same or less than check_radar_dist_every_px
-                // we can just ignore it
-                // why? you see, we loop through the distance via the radar
-                // bounds. not the map bounds, so there might be places
-                // where it'll be always empty (not good)
-
-                // in this case, we'll use the width as the reference
-                double dist = width * abs(current_distance - prev_distance) / (boundaries[3] - boundaries[1]);
-
-                if (radars.at(closest_index).kode == d.kode || dist <= check_radar_dist_every_px) {
-                    cv::Mat image_roi_current = image_roi(cv::Rect(x, y, width_current, height_current));
-                    cv::Mat container_roi_current = container_roi(cv::Rect(x, y, width_current, height_current));
-
-                    image_roi_current.copyTo(container_roi_current);
-                    radar_used_atleast_once = true;
+                    imgproc_jobs.erase(imgproc_jobs.begin() + job_index);
+                    delete cur;
+                    break;
                 }
             }
         }
+    }
 
-        if (radar_used_atleast_once) {
-            // lesson learned: do not create a pointer to a reference, it's gonna be... weird
-            used_radars.push_back(&(radars[i]));
+    for (auto remaining_job : imgproc_jobs) {
+        if (remaining_job->job.joinable()) {
+            remaining_job->job.join();
         }
+
+        delete remaining_job;
     }
 
     // color scheme replace
