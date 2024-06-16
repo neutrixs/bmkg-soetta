@@ -150,6 +150,15 @@ void radar::Imagery::render_loop(int width, int height, std::vector<radar::Radar
 
     bool radar_used_atleast_once = false;
 
+    // we wanna make sure the radar covers the whole square
+    // so, what we're gonna do is to 'decrease' the range by half the diagonal
+    // this way, we don't have to calculate all 4 corners of the square
+    // half diagonal means sqrt(2(x/2)^2), it simplifies to |x|/sqrt(2)
+    // but since x is the 'check_every_px' and it's always positive, it's just x/sqrt(2)
+    double half_diagonal = static_cast<double>(check_radar_dist_every_px) / std::sqrt(2.0);
+    // convert it to the relative longitude
+    half_diagonal = half_diagonal / width * (boundaries[3] - boundaries[1]);
+
     for (int y = 0; y < roi_height; y += check_radar_dist_every_px) {
         for (int x = 0; x < roi_width; x += check_radar_dist_every_px) {
             int width_current = std::min(check_radar_dist_every_px, roi_width - x);
@@ -176,7 +185,21 @@ void radar::Imagery::render_loop(int width, int height, std::vector<radar::Radar
                     current_distance = dist;
                 }
 
-                if (dist < prev_distance)
+                double rangeOverride = 0.;
+                bool rangeOverrideExists = false;
+                mtx.lock();
+                auto pos = radarRangeOverride.find(d.kode);
+                if (pos != radarRangeOverride.end()) {
+                    rangeOverrideExists = true;
+                    rangeOverride = pos->second;
+                }
+                mtx.unlock();
+
+                rangeOverride -= half_diagonal;
+                // since dist isn't square rooted, this will be squared
+                rangeOverride *= rangeOverride;
+
+                if (dist < prev_distance && dist <= rangeOverride)
                     prev_distance = dist, closest_index = i;
             }
 

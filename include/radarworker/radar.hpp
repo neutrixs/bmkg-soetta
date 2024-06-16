@@ -1,6 +1,9 @@
 #ifndef RADAR_HPP
 #define RADAR_HPP
 
+// converts the kilometer to longitude degree at equator
+#define KM / 40075 * 360
+
 #include <array>
 #include <chrono>
 #include <opencv2/opencv.hpp>
@@ -81,8 +84,13 @@ class Imagery {
     int zoom_level = 13;
     int check_radar_dist_every_px = 10;
     std::vector<std::string> exclude_radar;
+    std::map<std::string, double> radarRangeOverride;
 
     cv::Mat render(int width, int height);
+
+    Imagery() {
+        radarRangeOverride = {{"PWK", 120.0 KM}, {"CGK", 90.0 KM}, {"JAK", 200.0 KM}};
+    }
 
   private:
     void render_loop(int width, int height, std::vector<radar::RadarImage> &radars, std::vector<std::string> &raw_images,
