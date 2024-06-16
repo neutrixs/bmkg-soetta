@@ -69,7 +69,6 @@ void run(dpp::cluster &bot, const dpp::slashcommand_t &event) {
 
         map::Tiles tiles(bounding[0], bounding[1], bounding[2], bounding[3]);
         radar::Imagery imagery;
-        imagery.exclude_radar = {"CGK"};
         imagery.ignore_old_radars = ignore_old;
 
         cv::Mat image;
