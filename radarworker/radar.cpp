@@ -172,6 +172,7 @@ void radar::Imagery::render_loop(int width, int height, std::vector<radar::Radar
 
             unsigned int closest_index = 0;
             double prev_distance = UINT_MAX;
+            int prev_priority = 0;
             double current_distance = 0;
             double current_range_override = std::numeric_limits<double>::max();
 
@@ -220,8 +221,21 @@ void radar::Imagery::render_loop(int width, int height, std::vector<radar::Radar
                 // since dist isn't square rooted, this will be squared
                 rangeOverride *= rangeOverride;
 
-                if (dist < prev_distance && dist <= rangeOverride)
-                    prev_distance = dist, closest_index = i;
+                int current_priority = 0;
+
+                mtx.lock();
+                auto prior_pos = radarPriority.find(data.kode);
+                if (prior_pos != radarPriority.end()) {
+                    current_priority = prior_pos->second;
+                }
+                mtx.unlock();
+
+                if (dist <= rangeOverride && current_priority >= prev_priority) {
+                    // we'll give tolerance about half-diagonal, in case it creates an blank area
+                    if (current_priority > prev_priority || dist <= prev_distance + (half_diagonal * half_diagonal)) {
+                        prev_distance = dist, closest_index = i, prev_priority = current_priority;
+                    }
+                }
             }
 
             // if the distance difference between the closest and current radar
@@ -234,9 +248,9 @@ void radar::Imagery::render_loop(int width, int height, std::vector<radar::Radar
             // in this case, we'll use the width as the reference
             double dist = width * abs(current_distance - prev_distance) / (boundaries[3] - boundaries[1]);
 
-            if (radars.at(closest_index).kode == d.kode || dist <= check_radar_dist_every_px) {
-                cv::Mat image_roi_current = image_roi(cv::Rect(x, y, width_current, height_current));
+            if (radars.at(closest_index).kode == d.kode /*|| dist <= check_radar_dist_every_px*/) {
                 mtx.lock();
+                cv::Mat image_roi_current = image_roi(cv::Rect(x, y, width_current, height_current));
                 cv::Mat container_roi_current = container_roi(cv::Rect(x, y, width_current, height_current));
 
                 image_roi_current.copyTo(container_roi_current);

@@ -85,11 +85,13 @@ class Imagery {
     int check_radar_dist_every_px = 10;
     std::vector<std::string> exclude_radar;
     std::map<std::string, double> radarRangeOverride;
+    std::map<std::string, int> radarPriority;
 
     cv::Mat render(int width, int height);
 
     Imagery() {
         radarRangeOverride = {{"PWK", 120.0 KM}, {"CGK", 90.0 KM}, {"JAK", 200.0 KM}};
+        radarPriority = {{"PWK", 1}, {"CGK", 2}, {"JAK", 0}};
     }
 
   private:
