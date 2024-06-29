@@ -230,25 +230,22 @@ void radar::Imagery::render_loop(int width, int height, std::vector<radar::Radar
                 }
                 mtx.unlock();
 
+                // we'll give tolerance about half-diagonal, in case it creates an blank area
+                // ONLY if it's the same as d
+                if (data.kode == d.kode) {
+                    double actual_dist = sqrt(dist);
+                    actual_dist -= half_diagonal;
+                    dist = actual_dist * actual_dist;
+                }
+
                 if (dist <= rangeOverride && current_priority >= prev_priority) {
-                    // we'll give tolerance about half-diagonal, in case it creates an blank area
-                    if (current_priority > prev_priority || dist <= prev_distance + (half_diagonal * half_diagonal)) {
+                    if (current_priority > prev_priority || dist <= prev_distance) {
                         prev_distance = dist, closest_index = i, prev_priority = current_priority;
                     }
                 }
             }
 
-            // if the distance difference between the closest and current radar
-            // is the same or less than check_radar_dist_every_px
-            // we can just ignore it
-            // why? you see, we loop through the distance via the radar
-            // bounds. not the map bounds, so there might be places
-            // where it'll be always empty (not good)
-
-            // in this case, we'll use the width as the reference
-            double dist = width * abs(current_distance - prev_distance) / (boundaries[3] - boundaries[1]);
-
-            if (radars.at(closest_index).kode == d.kode /*|| dist <= check_radar_dist_every_px*/) {
+            if (radars.at(closest_index).kode == d.kode) {
                 mtx.lock();
                 cv::Mat image_roi_current = image_roi(cv::Rect(x, y, width_current, height_current));
                 cv::Mat container_roi_current = container_roi(cv::Rect(x, y, width_current, height_current));
@@ -541,6 +538,17 @@ void radar::Imagery::fetch_detailed_data(std::string code, std::mutex &mtx, std:
         std::chrono::system_clock::time_point tp;
         in >> date::parse("%Y-%m-%d %H:%M %Z", tp);
         std::string filename = last_1h["file"][i];
+
+        // debug only
+        if (radar_data.kode == "PWK") {
+            filename = "https://fs.neutrixs.my.id/bmkg_test/PWK.png";
+        }
+        if (radar_data.kode == "CGK") {
+            filename = "https://fs.neutrixs.my.id/bmkg_test/CGK.png";
+        }
+        if (radar_data.kode == "JAK") {
+            filename = "https://fs.neutrixs.my.id/bmkg_test/JAK.png";
+        }
 
         time.push_back(tp);
         file.push_back(filename);
