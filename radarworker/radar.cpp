@@ -173,24 +173,45 @@ void radar::Imagery::render_loop(int width, int height, std::vector<radar::Radar
             unsigned int closest_index = 0;
             double prev_distance = UINT_MAX;
             double current_distance = 0;
+            double current_range_override = std::numeric_limits<double>::max();
+
+            // the purpose of this loop is to determine IF the current radar
+            // can be applied to the image
+            // so therefore, if the current position is out of range of
+            // the current radar, then we should just continue the loop
+
+            double lat_dist = abs(d.lat - lat);
+            double lon_dist = abs(d.lon - lon);
+            current_distance = lat_dist * lat_dist + lon_dist * lon_dist;
+
+            mtx.lock();
+            auto pos = radarRangeOverride.find(d.kode);
+            if (pos != radarRangeOverride.end()) {
+                current_range_override = pos->second;
+                // since we don't sqrt current_distance, then we should square current_range_override
+                current_range_override *= current_range_override;
+            }
+            mtx.unlock();
+
+            if (current_distance > current_range_override)
+                continue;
+
+            // here, we're trying to check whether the current radar is the closest one
+            // to the coordinate
 
             for (int i = 0; i < radars.size(); i++) {
+                mtx.lock();
                 auto data = radars.at(i);
+                mtx.unlock();
 
                 double lat_dist = abs(data.lat - lat);
                 double lon_dist = abs(data.lon - lon);
                 double dist = lat_dist * lat_dist + lon_dist * lon_dist;
 
-                if (radars.at(i).kode == d.kode) {
-                    current_distance = dist;
-                }
-
-                double rangeOverride = 0.;
-                bool rangeOverrideExists = false;
+                double rangeOverride = std::numeric_limits<double>::max();
                 mtx.lock();
-                auto pos = radarRangeOverride.find(d.kode);
+                auto pos = radarRangeOverride.find(data.kode);
                 if (pos != radarRangeOverride.end()) {
-                    rangeOverrideExists = true;
                     rangeOverride = pos->second;
                 }
                 mtx.unlock();
