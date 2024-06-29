@@ -540,15 +540,15 @@ void radar::Imagery::fetch_detailed_data(std::string code, std::mutex &mtx, std:
         std::string filename = last_1h["file"][i];
 
         // debug only
-        if (radar_data.kode == "PWK") {
-            filename = "https://fs.neutrixs.my.id/bmkg_test/PWK.png";
-        }
-        if (radar_data.kode == "CGK") {
-            filename = "https://fs.neutrixs.my.id/bmkg_test/CGK.png";
-        }
-        if (radar_data.kode == "JAK") {
-            filename = "https://fs.neutrixs.my.id/bmkg_test/JAK.png";
-        }
+        // if (radar_data.kode == "PWK") {
+        //     filename = "https://fs.neutrixs.my.id/bmkg_test/PWK.png";
+        // }
+        // if (radar_data.kode == "CGK") {
+        //     filename = "https://fs.neutrixs.my.id/bmkg_test/CGK.png";
+        // }
+        // if (radar_data.kode == "JAK") {
+        //     filename = "https://fs.neutrixs.my.id/bmkg_test/JAK.png";
+        // }
 
         time.push_back(tp);
         file.push_back(filename);
