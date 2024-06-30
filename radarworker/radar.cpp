@@ -176,7 +176,7 @@ void radar::Imagery::render_loop(int width, int height, std::vector<radar::Radar
             double prev_distance = UINT_MAX;
             int prev_priority = 0;
             double current_distance = 0;
-            double current_range_override = std::numeric_limits<double>::max();
+            double current_range_override = 200.0 KM;
 
             // the purpose of this loop is to determine IF the current radar
             // can be applied to the image
@@ -211,7 +211,7 @@ void radar::Imagery::render_loop(int width, int height, std::vector<radar::Radar
                 double lon_dist = abs(data.lon - lon);
                 double dist = lat_dist * lat_dist + lon_dist * lon_dist;
 
-                double rangeOverride = std::numeric_limits<double>::max();
+                double rangeOverride = 200.0 KM;
                 mtx.lock();
                 auto pos = radarRangeOverride.find(data.kode);
                 if (pos != radarRangeOverride.end()) {
