@@ -159,6 +159,8 @@ void radar::Imagery::render_loop(int width, int height, std::vector<radar::Radar
     // convert it to the relative longitude
     half_diagonal = half_diagonal / width * (boundaries[3] - boundaries[1]);
 
+    // TODO: try to find ways to skip the unnecessary loop where it's out of range
+
     for (int y = 0; y < roi_height; y += check_radar_dist_every_px) {
         for (int x = 0; x < roi_width; x += check_radar_dist_every_px) {
             int width_current = std::min(check_radar_dist_every_px, roi_width - x);
