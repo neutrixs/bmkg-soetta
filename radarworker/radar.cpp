@@ -400,7 +400,7 @@ std::vector<radar::RadarImage> &radar::Imagery::get_radar_datas() {
         throw std::runtime_error("Error parsing JSON: " + err);
     }
 
-    for (auto &radar : list_data) {
+    for (auto &radar : list_data["datas"]) {
         auto tlc_raw = radar["overlayTLC"];
         auto brc_raw = radar["overlayBRC"];
 
@@ -454,7 +454,6 @@ std::vector<radar::RadarImage> &radar::Imagery::get_radar_datas() {
             job.join();
         }
     }
-
     return radar_datas;
 }
 
