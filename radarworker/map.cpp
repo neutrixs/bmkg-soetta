@@ -18,7 +18,7 @@
 namespace fs = boost::filesystem;
 using json = nlohmann::json;
 
-const std::string OSM_TILES_BASE_URL = "https://tile.openstreetmap.fr/hot/";
+const std::string OSM_TILES_BASE_URL = "https://tile.openstreetmap.org/";
 const std::string OSM_NOMINATIM_SEARCH_BASE_URL = "https://nominatim.openstreetmap.org/search";
 
 cv::Mat map::Tiles::render() {
