@@ -47,7 +47,9 @@ std::string fetch::get(std::string url, std::list<std::string> headers) {
         auto elapsed = std::chrono::duration_cast<std::chrono::milliseconds>(end_time - start_time);
 
         if (elapsed.count() > 20000 && !done) {
+            job.detach();
             runtime_error = "HTTP Request timeout";
+            throw runtime_error;
         }
 
         if (done)
