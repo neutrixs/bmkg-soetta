@@ -86,7 +86,7 @@ class Imagery {
 
     int zoom_level = 13;
     int check_radar_dist_every_px = 10;
-    double DEFAULT_RANGE = 200.0 KM;
+    double DEFAULT_RANGE = 240.0 KM;
     std::vector<std::string> exclude_radar;
     std::map<std::string, double> radarRangeOverride;
     std::map<std::string, int> radarPriority;
