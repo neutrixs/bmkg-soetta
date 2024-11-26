@@ -31,13 +31,13 @@ bool radar::is_overlapping(std::array<double, 4> x, std::array<double, 4> y) {
 
 void radar::Imagery::render_loop(int width, int height, std::vector<radar::RadarImage> &radars,
     std::vector<std::string> &raw_images, cv::Mat &container, int i, std::mutex &mtx, bool *is_done) {
+
     mtx.lock();
-    auto d = radars.at(i);
-    auto content = raw_images.at(i);
+    radar::RadarImage d = radars.at(i);
+    std::string img_content = raw_images.at(i);
     mtx.unlock();
 
-    std::vector<uchar> buffer(content.begin(), content.end());
-
+    std::vector<uchar> buffer(img_content.begin(), img_content.end());
     cv::Mat image;
     try {
         image = cv::imdecode(buffer, cv::IMREAD_UNCHANGED);
@@ -150,122 +150,312 @@ void radar::Imagery::render_loop(int width, int height, std::vector<radar::Radar
 
     bool radar_used_atleast_once = false;
 
-    // we wanna make sure the radar covers the whole square
-    // so, what we're gonna do is to 'decrease' the range by half the diagonal
-    // this way, we don't have to calculate all 4 corners of the square
-    // half diagonal means sqrt(2(x/2)^2), it simplifies to |x|/sqrt(2)
-    // but since x is the 'check_every_px' and it's always positive, it's just x/sqrt(2)
-    double half_diagonal = static_cast<double>(check_radar_dist_every_px) / std::sqrt(2.0);
-    // convert it to the relative longitude
-    half_diagonal = half_diagonal / width * (boundaries[3] - boundaries[1]);
+    // note: the calculation here will use KM relative to the current radar
+    // therefore, we assume that the position of the current radar is 0,0
+    struct PositionalData {
+        radar::RadarImage data;
+        double range;
+        int priority;
+        double relative_x;
+        double relative_y;
+    };
 
-    // TODO: try to find ways to skip the unnecessary loop where it's out of range
+    std::vector<PositionalData> overlapping_radars;
+    double current_range = DEFAULT_RANGE DEG;
+    int current_priority = 0;
 
-    for (int y = 0; y < roi_height; y += check_radar_dist_every_px) {
-        for (int x = 0; x < roi_width; x += check_radar_dist_every_px) {
-            int width_current = std::min(check_radar_dist_every_px, roi_width - x);
-            int height_current = std::min(check_radar_dist_every_px, roi_height - y);
+    mtx.lock();
+    auto current_range_pos = radarRangeOverride.find(d.kode);
+    if (current_range_pos != radarRangeOverride.end()) {
+        current_range = current_range_pos->second DEG;
+    }
+    auto current_priority_pos = radarPriority.find(d.kode);
+    if (current_priority_pos != radarPriority.end()) {
+        current_priority = current_priority_pos->second;
+    }
+    mtx.unlock();
 
-            double cen_x = roi_x_start + (2 * x + width_current) / 2.0;
-            double cen_y = roi_y_start + (2 * y + height_current) / 2.0;
+    for (int r_index = 0; r_index < radars.size(); r_index++) {
+        if (i == r_index) {
+            continue;
+        }
+        mtx.lock();
+        radar::RadarImage indexed_radar = radars.at(r_index);
+        mtx.unlock();
+        double dist_x = (indexed_radar.lon - d.lon) DEG;
+        double dist_y = (indexed_radar.lat - d.lat) DEG;
+        double dist = sqrt(dist_x * dist_x + dist_y * dist_y);
 
-            double lat = boundaries[0] - (boundaries[0] - boundaries[2]) * cen_y / height;
-            double lon = boundaries[1] + (boundaries[3] - boundaries[1]) * cen_x / width;
+        double indexed_range = DEFAULT_RANGE DEG;
+        mtx.lock();
+        auto indexed_range_pos = radarRangeOverride.find(indexed_radar.kode);
+        if (indexed_range_pos != radarRangeOverride.end()) {
+            indexed_range = indexed_range_pos->second DEG;
+        }
+        mtx.unlock();
 
-            unsigned int closest_index = 0;
-            double prev_distance = UINT_MAX;
-            int prev_priority = 0;
-            double current_distance = 0;
-            double current_range_override = 200.0 KM;
-
-            // the purpose of this loop is to determine IF the current radar
-            // can be applied to the image
-            // so therefore, if the current position is out of range of
-            // the current radar, then we should just continue the loop
-
-            double lat_dist = abs(d.lat - lat);
-            double lon_dist = abs(d.lon - lon);
-            current_distance = lat_dist * lat_dist + lon_dist * lon_dist;
-
+        if (dist < current_range + indexed_range) {
+            int indexed_priority = 0;
             mtx.lock();
-            auto pos = radarRangeOverride.find(d.kode);
-            if (pos != radarRangeOverride.end()) {
-                current_range_override = pos->second;
-                // since we don't sqrt current_distance, then we should square current_range_override
-                current_range_override *= current_range_override;
+            auto indexed_priority_pos = radarPriority.find(indexed_radar.kode);
+            if (indexed_priority_pos != radarPriority.end()) {
+                indexed_priority = indexed_priority_pos->second;
             }
             mtx.unlock();
 
-            if (current_distance > current_range_override)
-                continue;
+            double relative_x = (indexed_radar.lon - d.lon) DEG;
+            double relative_y = (indexed_radar.lat - d.lat) DEG;
 
-            // here, we're trying to check whether the current radar is the closest one
-            // to the coordinate
-
-            for (int i = 0; i < radars.size(); i++) {
-                mtx.lock();
-                auto data = radars.at(i);
-                mtx.unlock();
-
-                double lat_dist = abs(data.lat - lat);
-                double lon_dist = abs(data.lon - lon);
-                double dist = lat_dist * lat_dist + lon_dist * lon_dist;
-
-                double rangeOverride = 200.0 KM;
-                mtx.lock();
-                auto pos = radarRangeOverride.find(data.kode);
-                if (pos != radarRangeOverride.end()) {
-                    rangeOverride = pos->second;
-                }
-                mtx.unlock();
-
-                rangeOverride -= half_diagonal;
-                // since dist isn't square rooted, this will be squared
-                rangeOverride *= rangeOverride;
-
-                int current_priority = 0;
-
-                mtx.lock();
-                auto prior_pos = radarPriority.find(data.kode);
-                if (prior_pos != radarPriority.end()) {
-                    current_priority = prior_pos->second;
-                }
-                mtx.unlock();
-
-                // we'll give tolerance about half-diagonal, in case it creates an blank area
-                // ONLY if it's the same as d
-                if (data.kode == d.kode) {
-                    double actual_dist = sqrt(dist);
-                    actual_dist -= half_diagonal;
-                    dist = actual_dist * actual_dist;
-                }
-
-                if (dist <= rangeOverride && current_priority >= prev_priority) {
-                    if (current_priority > prev_priority || dist <= prev_distance) {
-                        prev_distance = dist, closest_index = i, prev_priority = current_priority;
-                    }
-                }
-            }
-
-            if (radars.at(closest_index).kode == d.kode) {
-                mtx.lock();
-                cv::Mat image_roi_current = image_roi(cv::Rect(x, y, width_current, height_current));
-                cv::Mat container_roi_current = container_roi(cv::Rect(x, y, width_current, height_current));
-
-                image_roi_current.copyTo(container_roi_current);
-                mtx.unlock();
-                radar_used_atleast_once = true;
-            }
+            PositionalData pos_data = {indexed_radar, indexed_range, indexed_priority, relative_x, relative_y};
+            overlapping_radars.push_back(pos_data);
         }
     }
 
-    if (radar_used_atleast_once) {
-        // lesson learned: do not create a pointer to a reference, it's gonna be... weird
-        used_radars.push_back(&(radars[i]));
+    std::cout << d.stasiun << std::endl;
+    for (auto n : overlapping_radars) {
+        std::cout << n.data.stasiun << std::endl;
+        std::cout << n.relative_x << " " << n.relative_y << std::endl;
     }
-
-    *is_done = true;
+    std::cout << std::endl;
 }
+
+// void radar::Imagery::render_loop(int width, int height, std::vector<radar::RadarImage> &radars,
+//     std::vector<std::string> &raw_images, cv::Mat &container, int i, std::mutex &mtx, bool *is_done) {
+//     mtx.lock();
+//     auto d = radars.at(i);
+//     auto content = raw_images.at(i);
+//     mtx.unlock();
+
+//     std::vector<uchar> buffer(content.begin(), content.end());
+
+//     cv::Mat image;
+//     try {
+//         image = cv::imdecode(buffer, cv::IMREAD_UNCHANGED);
+//     } catch (cv::Exception &e) {
+//         std::string err = e.what();
+//         throw std::runtime_error("OpenCV error: " + err);
+//     }
+
+//     int radar_width = image.cols, radar_height = image.rows;
+
+//     // crop if necessary to fit the map (approximate, obviously larger than the accurate size)
+//     // we will crop it later
+//     // but, image_cropx is accurate
+//     // and note the new boundaries of the radar
+//     double image_cropleft = (boundaries[1] - d.boundaries[1]) / (d.boundaries[3] - d.boundaries[1]) * radar_width;
+//     image_cropleft = std::max(0., image_cropleft);
+//     int image_cropleft_floor = floor(image_cropleft);
+
+//     double image_cropright = (d.boundaries[3] - boundaries[3]) / (d.boundaries[3] - d.boundaries[1]) * radar_width;
+//     image_cropright = std::max(0., image_cropright);
+//     int image_cropright_floor = floor(image_cropright);
+
+//     double image_croptop = (d.boundaries[0] - boundaries[0]) / (d.boundaries[0] - d.boundaries[2]) * radar_height;
+//     image_croptop = std::max(0., image_croptop);
+//     int image_croptop_floor = floor(image_croptop);
+
+//     double image_cropbottom = (boundaries[2] - d.boundaries[2]) / (d.boundaries[0] - d.boundaries[2]) * radar_height;
+//     image_cropbottom = std::max(0., image_cropbottom);
+//     int image_cropbottom_floor = floor(image_cropbottom);
+
+//     int image_cropwidth = radar_width - image_cropleft_floor - image_cropright_floor;
+//     int image_cropheight = radar_height - image_croptop_floor - image_cropbottom_floor;
+
+//     // crop the image, not creating a copy
+//     cv::Mat image_crop = image(cv::Rect(image_cropleft_floor, image_croptop_floor, image_cropwidth, image_cropheight));
+//     image_crop.copyTo(image);
+
+//     std::array<double, 4> image_cropbounds = {
+//         d.boundaries[0] - (d.boundaries[0] - d.boundaries[2]) * image_croptop / radar_height,
+//         d.boundaries[1] + (d.boundaries[3] - d.boundaries[1]) * image_cropleft / radar_width,
+//         d.boundaries[2] + (d.boundaries[0] - d.boundaries[2]) * image_cropbottom / radar_height,
+//         d.boundaries[3] - (d.boundaries[3] - d.boundaries[1]) * image_cropright / radar_width //
+//     };
+
+//     // bounds for the approximated cropped image
+//     std::array<double, 4> image_cropbounds_floor = {
+//         d.boundaries[0] - (d.boundaries[0] - d.boundaries[2]) * image_croptop_floor / radar_height,
+//         d.boundaries[1] + (d.boundaries[3] - d.boundaries[1]) * image_cropleft_floor / radar_width,
+//         d.boundaries[2] + (d.boundaries[0] - d.boundaries[2]) * image_cropbottom_floor / radar_height,
+//         d.boundaries[3] - (d.boundaries[3] - d.boundaries[1]) * image_cropright_floor / radar_width //
+//     };
+
+//     // this is where to put the image on the container
+//     // points: x,y
+//     std::array<int, 2> image_croppoints = {
+//         static_cast<int>(width * (image_cropbounds[1] - boundaries[1]) / (boundaries[3] - boundaries[1])),
+//         static_cast<int>(height * (boundaries[0] - image_cropbounds[0]) / (boundaries[0] - boundaries[2])) //
+//     };
+
+//     // scale (resize) the image according to width, height and boundaries
+//     int scaled_width = round(width * (image_cropbounds_floor[3] - image_cropbounds_floor[1]) / (boundaries[3] -
+//     boundaries[1])); int scaled_height =
+//         round(height * (image_cropbounds_floor[0] - image_cropbounds_floor[2]) / (boundaries[0] - boundaries[2]));
+
+//     cv::resize(image, image, cv::Size(scaled_width, scaled_height), 0, 0, cv::INTER_NEAREST);
+
+//     // create image roi of the more accurate version (in some cases it will be more accurate)
+//     int trim_left = round(scaled_width * (image_cropbounds[1] - image_cropbounds_floor[1]) /
+//         (image_cropbounds_floor[3] - image_cropbounds_floor[1]));
+//     int trim_right = round(scaled_width * (image_cropbounds_floor[3] - image_cropbounds[3]) /
+//         (image_cropbounds_floor[3] - image_cropbounds_floor[1]));
+
+//     int trim_top = round(scaled_height * (image_cropbounds_floor[0] - image_cropbounds[0]) /
+//         (image_cropbounds_floor[0] - image_cropbounds_floor[2]));
+//     int trim_bottom = round(scaled_height * (image_cropbounds[2] - image_cropbounds_floor[2]) /
+//         (image_cropbounds_floor[0] - image_cropbounds_floor[2]));
+
+//     // using std::min just in case slightly inaccurate calculation made it few pixels larger than what
+//     // the container can hold
+//     int trim_width = scaled_width - trim_left - trim_right;
+//     trim_width = std::min(width - image_croppoints[0], trim_width);
+
+//     int trim_height = scaled_height - trim_top - trim_bottom;
+//     trim_height = std::min(height - image_croppoints[1], trim_height);
+
+//     cv::Mat image_roi = image(cv::Rect(trim_left, trim_top, trim_width, trim_height));
+//     mtx.lock();
+//     cv::Mat container_roi = container(cv::Rect(image_croppoints[0], image_croppoints[1], trim_width, trim_height));
+//     mtx.unlock();
+
+//     int &roi_width = trim_width;
+//     int &roi_height = trim_height;
+//     int &roi_x_start = image_croppoints[0];
+//     int &roi_y_start = image_croppoints[1];
+
+//     // check if the radar is outdated, if it is, create striped pattern, every some px
+//     const int STRIPE_EVERY_PX = 2;
+//     cv::Mat empty_mask = cv::Mat::zeros(STRIPE_EVERY_PX, roi_width, CV_8UC4);
+
+//     auto seconds_to_now = std::time(nullptr) - std::chrono::system_clock::to_time_t(d.data.time.back());
+
+//     if (seconds_to_now > (declare_old_after_mins * 60) && stripe_on_old_radars) {
+//         for (int y = 0; y < roi_height; y += STRIPE_EVERY_PX * 2) {
+//             int current_height = std::min(STRIPE_EVERY_PX, roi_height - y);
+//             cv::Mat empty_mask_roi = empty_mask(cv::Rect(0, 0, roi_width, current_height));
+//             cv::Mat image_roi_roi = image_roi(cv::Rect(0, y, roi_width, current_height));
+//             empty_mask_roi.copyTo(image_roi_roi);
+//         }
+//     }
+
+//     bool radar_used_atleast_once = false;
+
+//     // we wanna make sure the radar covers the whole square
+//     // so, what we're gonna do is to 'decrease' the range by half the diagonal
+//     // this way, we don't have to calculate all 4 corners of the square
+//     // half diagonal means sqrt(2(x/2)^2), it simplifies to |x|/sqrt(2)
+//     // but since x is the 'check_every_px' and it's always positive, it's just x/sqrt(2)
+//     double half_diagonal = static_cast<double>(check_radar_dist_every_px) / std::sqrt(2.0);
+//     // convert it to the relative longitude
+//     half_diagonal = half_diagonal / width * (boundaries[3] - boundaries[1]);
+
+//     // TODO: try to find ways to skip the unnecessary loop where it's out of range
+
+//     for (int y = 0; y < roi_height; y += check_radar_dist_every_px) {
+//         for (int x = 0; x < roi_width; x += check_radar_dist_every_px) {
+//             int width_current = std::min(check_radar_dist_every_px, roi_width - x);
+//             int height_current = std::min(check_radar_dist_every_px, roi_height - y);
+
+//             double cen_x = roi_x_start + (2 * x + width_current) / 2.0;
+//             double cen_y = roi_y_start + (2 * y + height_current) / 2.0;
+
+//             double lat = boundaries[0] - (boundaries[0] - boundaries[2]) * cen_y / height;
+//             double lon = boundaries[1] + (boundaries[3] - boundaries[1]) * cen_x / width;
+
+//             unsigned int closest_index = 0;
+//             double prev_distance = UINT_MAX;
+//             int prev_priority = 0;
+//             double current_distance = 0;
+//             double current_range_override = 200.0 KM;
+
+//             // the purpose of this loop is to determine IF the current radar
+//             // can be applied to the image
+//             // so therefore, if the current position is out of range of
+//             // the current radar, then we should just continue the loop
+
+//             double lat_dist = abs(d.lat - lat);
+//             double lon_dist = abs(d.lon - lon);
+//             current_distance = lat_dist * lat_dist + lon_dist * lon_dist;
+
+//             mtx.lock();
+//             auto pos = radarRangeOverride.find(d.kode);
+//             if (pos != radarRangeOverride.end()) {
+//                 current_range_override = pos->second;
+//                 // since we don't sqrt current_distance, then we should square current_range_override
+//                 current_range_override *= current_range_override;
+//             }
+//             mtx.unlock();
+
+//             if (current_distance > current_range_override)
+//                 continue;
+
+//             // here, we're trying to check whether the current radar is the closest one
+//             // to the coordinate
+
+//             for (int i = 0; i < radars.size(); i++) {
+//                 mtx.lock();
+//                 auto data = radars.at(i);
+//                 mtx.unlock();
+
+//                 double lat_dist = abs(data.lat - lat);
+//                 double lon_dist = abs(data.lon - lon);
+//                 double dist = lat_dist * lat_dist + lon_dist * lon_dist;
+
+//                 double rangeOverride = 200.0 KM;
+//                 mtx.lock();
+//                 auto pos = radarRangeOverride.find(data.kode);
+//                 if (pos != radarRangeOverride.end()) {
+//                     rangeOverride = pos->second;
+//                 }
+//                 mtx.unlock();
+
+//                 rangeOverride -= half_diagonal;
+//                 // since dist isn't square rooted, this will be squared
+//                 rangeOverride *= rangeOverride;
+
+//                 int current_priority = 0;
+
+//                 mtx.lock();
+//                 auto prior_pos = radarPriority.find(data.kode);
+//                 if (prior_pos != radarPriority.end()) {
+//                     current_priority = prior_pos->second;
+//                 }
+//                 mtx.unlock();
+
+//                 // we'll give tolerance about half-diagonal, in case it creates an blank area
+//                 // ONLY if it's the same as d
+//                 if (data.kode == d.kode) {
+//                     double actual_dist = sqrt(dist);
+//                     actual_dist -= half_diagonal;
+//                     dist = actual_dist * actual_dist;
+//                 }
+
+//                 if (dist <= rangeOverride && current_priority >= prev_priority) {
+//                     if (current_priority > prev_priority || dist <= prev_distance) {
+//                         prev_distance = dist, closest_index = i, prev_priority = current_priority;
+//                     }
+//                 }
+//             }
+
+//             if (radars.at(closest_index).kode == d.kode) {
+//                 mtx.lock();
+//                 cv::Mat image_roi_current = image_roi(cv::Rect(x, y, width_current, height_current));
+//                 cv::Mat container_roi_current = container_roi(cv::Rect(x, y, width_current, height_current));
+
+//                 image_roi_current.copyTo(container_roi_current);
+//                 mtx.unlock();
+//                 radar_used_atleast_once = true;
+//             }
+//         }
+//     }
+
+//     if (radar_used_atleast_once) {
+//         // lesson learned: do not create a pointer to a reference, it's gonna be... weird
+//         used_radars.push_back(&(radars[i]));
+//     }
+
+//     *is_done = true;
+// }
 
 cv::Mat radar::Imagery::render(int width, int height) {
     std::vector<radar::RadarImage> &radars = get_radar_datas();

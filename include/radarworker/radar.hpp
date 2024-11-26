@@ -3,6 +3,7 @@
 
 // converts the kilometer to longitude degree at equator
 #define KM / 40075 * 360
+#define DEG *40075 / 360
 
 #include <array>
 #include <chrono>
@@ -83,6 +84,7 @@ class Imagery {
 
     int zoom_level = 13;
     int check_radar_dist_every_px = 10;
+    double DEFAULT_RANGE = 200.0 KM;
     std::vector<std::string> exclude_radar;
     std::map<std::string, double> radarRangeOverride;
     std::map<std::string, int> radarPriority;
