@@ -417,6 +417,9 @@ cv::Mat radar::Imagery::render(int width, int height) {
 
     // color scheme replace
     for (int row = 0; row < container.rows; row++) {
+        if (radars.size() == 0) {
+            break;
+        }
         for (int col = 0; col < container.cols; col++) {
             cv::Vec4b &pixelValue = container.at<cv::Vec4b>(row, col);
 
