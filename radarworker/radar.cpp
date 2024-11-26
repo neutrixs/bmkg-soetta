@@ -319,7 +319,9 @@ void radar::Imagery::render_loop(int width, int height, std::vector<radar::Radar
     }
 
     if (radar_used_atleast_once) {
+        mtx.lock();
         used_radars.push_back(&(radars[i]));
+        mtx.unlock();
     }
 
     *is_done = true;
