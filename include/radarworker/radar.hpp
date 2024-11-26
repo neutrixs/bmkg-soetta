@@ -14,6 +14,9 @@ namespace radar {
 constexpr char RADAR_LIST_API_URL[] = "https://radar.bmkg.go.id:8090/radarlist";
 constexpr char RADAR_IMAGE_PUBLIC_API_URL[] = "https://api-apps.bmkg.go.id/api/radar-image";
 constexpr char RADAR_IMAGE_API_URL[] = "https://radar.bmkg.go.id:8090/sidarmaimage";
+// usually, double is pretty accurate, zero will be around 10^-13 or something
+// however, this is just to be safe
+constexpr double EPSILON = 0.0000001;
 
 struct Color {
     int r;
@@ -83,6 +86,7 @@ class Imagery {
 
     int zoom_level = 13;
     int check_radar_dist_every_px = 10;
+    double DEFAULT_RANGE = 200.0 KM;
     std::vector<std::string> exclude_radar;
     std::map<std::string, double> radarRangeOverride;
     std::map<std::string, int> radarPriority;
