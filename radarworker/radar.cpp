@@ -29,6 +29,49 @@ bool radar::is_overlapping(std::array<double, 4> x, std::array<double, 4> y) {
     return lat_overlap && lon_overlap;
 }
 
+struct PositionalData {
+    radar::RadarImage data;
+    double range;
+    int priority;
+    bool use_Qx2;
+};
+
+double Qx1(double y, double x1, double x2, double y1, double y2) {
+    double numerator = -(y - y1) * (y - y1) + (y - y2) * (y - y2) - x1 * x1 + x2 * x2;
+    double denominator = 2 * (x2 - x1);
+
+    return numerator / denominator;
+}
+
+// Halfway line between C1 and C2
+double Q1(double x, double y, double x1, double x2, double y1, double y2) {
+    return (x - x1) * (x - x1) - (x - x2) * (x - x2) + (y - y1) * (y - y1) - (y - y2) * (y - y2);
+}
+
+// Area outside of C2
+double Q2(double x, double y, double x2, double y2, double r2) {
+    return -(x - x2) * (x - x2) - (y - y2) * (y - y2) + r2 * r2;
+}
+
+// Area of C1
+double Q3(double x, double y, double x1, double y1, double r1) {
+    return (x - x1) * (x - x1) + (y - y1) * (y - y1) - r1 * r1;
+}
+
+std::vector<double> min_Q1_Q2(PositionalData current, std::vector<PositionalData> radars, double x, double y) {
+    std::vector<double> result;
+    for (auto radar : radars) {
+        double minimum = Q2(x, y, radar.data.lon, radar.data.lat, radar.range);
+        if (current.priority == radar.priority) {
+            minimum = std::min(minimum, Q1(x, y, current.data.lon, radar.data.lon, current.data.lat, radar.data.lat));
+        }
+
+        result.push_back(minimum);
+    }
+
+    return result;
+}
+
 void radar::Imagery::render_loop(int width, int height, std::vector<radar::RadarImage> &radars,
     std::vector<std::string> &raw_images, cv::Mat &container, int i, std::mutex &mtx, bool *is_done) {
 
@@ -150,30 +193,21 @@ void radar::Imagery::render_loop(int width, int height, std::vector<radar::Radar
 
     bool radar_used_atleast_once = false;
 
-    // note: the calculation here will use KM relative to the current radar
-    // therefore, we assume that the position of the current radar is 0,0
-    struct PositionalData {
-        radar::RadarImage data;
-        double range;
-        int priority;
-        double relative_x;
-        double relative_y;
-    };
-
     std::vector<PositionalData> overlapping_radars;
-    double current_range = DEFAULT_RANGE DEG;
+    double current_range = DEFAULT_RANGE;
     int current_priority = 0;
 
     mtx.lock();
     auto current_range_pos = radarRangeOverride.find(d.kode);
     if (current_range_pos != radarRangeOverride.end()) {
-        current_range = current_range_pos->second DEG;
+        current_range = current_range_pos->second;
     }
     auto current_priority_pos = radarPriority.find(d.kode);
     if (current_priority_pos != radarPriority.end()) {
         current_priority = current_priority_pos->second;
     }
     mtx.unlock();
+    PositionalData current_positional_data = {d, current_range, current_priority};
 
     for (int r_index = 0; r_index < radars.size(); r_index++) {
         if (i == r_index) {
@@ -182,41 +216,97 @@ void radar::Imagery::render_loop(int width, int height, std::vector<radar::Radar
         mtx.lock();
         radar::RadarImage indexed_radar = radars.at(r_index);
         mtx.unlock();
-        double dist_x = (indexed_radar.lon - d.lon) DEG;
-        double dist_y = (indexed_radar.lat - d.lat) DEG;
+        double dist_x = (indexed_radar.lon - d.lon);
+        double dist_y = (indexed_radar.lat - d.lat);
         double dist = sqrt(dist_x * dist_x + dist_y * dist_y);
 
-        double indexed_range = DEFAULT_RANGE DEG;
+        double indexed_range = DEFAULT_RANGE;
+        int indexed_priority = 0;
         mtx.lock();
         auto indexed_range_pos = radarRangeOverride.find(indexed_radar.kode);
         if (indexed_range_pos != radarRangeOverride.end()) {
-            indexed_range = indexed_range_pos->second DEG;
+            indexed_range = indexed_range_pos->second;
+        }
+
+        auto indexed_priority_pos = radarPriority.find(indexed_radar.kode);
+        if (indexed_priority_pos != radarPriority.end()) {
+            indexed_priority = indexed_priority_pos->second;
         }
         mtx.unlock();
 
+        if (current_priority > indexed_priority) {
+            continue;
+        }
+
         if (dist < current_range + indexed_range) {
-            int indexed_priority = 0;
-            mtx.lock();
-            auto indexed_priority_pos = radarPriority.find(indexed_radar.kode);
-            if (indexed_priority_pos != radarPriority.end()) {
-                indexed_priority = indexed_priority_pos->second;
-            }
-            mtx.unlock();
+            bool use_Qx2 = indexed_range < current_range;
 
-            double relative_x = (indexed_radar.lon - d.lon) DEG;
-            double relative_y = (indexed_radar.lat - d.lat) DEG;
-
-            PositionalData pos_data = {indexed_radar, indexed_range, indexed_priority, relative_x, relative_y};
+            PositionalData pos_data = {indexed_radar, indexed_range, indexed_priority, use_Qx2};
             overlapping_radars.push_back(pos_data);
         }
     }
 
-    std::cout << d.stasiun << std::endl;
-    for (auto n : overlapping_radars) {
-        std::cout << n.data.stasiun << std::endl;
-        std::cout << n.relative_x << " " << n.relative_y << std::endl;
+    // https://www.desmos.com/calculator/lgmzgbhlxd
+
+    double px_width = (boundaries[3] - boundaries[1]) / width;
+    for (int y = 0; y < roi_height; y++) {
+        double cen_y = roi_y_start + y + 0.5;
+        double lat = boundaries[0] - (boundaries[0] - boundaries[2]) * cen_y / height;
+        std::vector<double> x_to_check;
+
+        double determinant = current_range * current_range - (lat - d.lat) * (lat - d.lat);
+        if (determinant < 0) {
+            continue;
+        }
+
+        double Qx3right = sqrt(determinant);
+        x_to_check.push_back(d.lon + Qx3right);
+        x_to_check.push_back(d.lon - Qx3right);
+
+        for (auto pos_data : overlapping_radars) {
+            double Qx1Result = Qx1(lat, d.lon, pos_data.data.lon, d.lat, pos_data.data.lat);
+            // imagine if it goes to almost infinity, not a fun calculation
+            // it's just a safeguard (not really but yeah)
+            if (abs(Qx1Result - d.lon) <= current_range && current_priority == pos_data.priority) {
+                x_to_check.push_back(Qx1Result);
+            }
+
+            double Qx2det = pos_data.range * pos_data.range - (lat - pos_data.data.lat) * (lat - pos_data.data.lat);
+            if (pos_data.use_Qx2 && Qx2det >= 0) {
+                double Qx2right = sqrt(Qx2det);
+                x_to_check.push_back(pos_data.data.lon + Qx2right);
+                x_to_check.push_back(pos_data.data.lon - Qx2right);
+            }
+        }
+
+        std::vector<int> x_boundaries;
+        for (auto x : x_to_check) {
+            double maximum_value = Q3(x, lat, d.lon, d.lat, current_range);
+            auto minimum_values = min_Q1_Q2(current_positional_data, overlapping_radars, x, lat);
+
+            for (auto min : minimum_values) {
+                maximum_value = std::max(maximum_value, min);
+            }
+
+            // if it equals zero, then yes that IS the boundary
+            if (abs(maximum_value) < EPSILON) {
+                // convert this to roi relative... ugh
+                double bound = width * (x - boundaries[1]) / (boundaries[3] - boundaries[1]) - roi_x_start;
+                x_boundaries.push_back(static_cast<int>(floor(bound)));
+            }
+        }
+
+        std::sort(x_boundaries.begin(), x_boundaries.end());
+
+        mtx.lock();
+        for (auto n : x_boundaries) {
+            std::cout << n << " ";
+        }
+        std::cout << std::endl;
+        mtx.unlock();
     }
-    std::cout << std::endl;
+
+    *is_done = true;
 }
 
 // void radar::Imagery::render_loop(int width, int height, std::vector<radar::RadarImage> &radars,
