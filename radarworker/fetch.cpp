@@ -21,13 +21,18 @@ std::string fetch::get(std::string url, std::list<std::string> headers) {
     std::thread job([url, rp, re, dp, headers] {
         try {
             curlpp::Easy req;
-            req.setOpt(new curlpp::options::Url(url));
+            curlpp::options::Url url_options(url);
+            curlpp::options::SslVerifyPeer ssl_verify_peer(false);
+            curlpp::options::SslVerifyHost ssl_verify_host(false);
+            curlpp::options::HttpHeader http_header(headers);
+
+            req.setOpt(url_options);
 
             // well, it seems like it doesn't recognize ssl certificate on non-443 port
             // whatever, i don't care
-            req.setOpt(new curlpp::options::SslVerifyPeer(false));
-            req.setOpt(new curlpp::options::SslVerifyHost(false));
-            req.setOpt(new curlpp::options::HttpHeader(headers));
+            req.setOpt(ssl_verify_peer);
+            req.setOpt(ssl_verify_host);
+            req.setOpt(http_header);
 
             curlpp::options::WriteStream write(rp);
             req.setOpt(write);
