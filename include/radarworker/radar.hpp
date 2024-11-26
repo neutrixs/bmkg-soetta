@@ -3,7 +3,6 @@
 
 // converts the kilometer to longitude degree at equator
 #define KM / 40075 * 360
-#define DEG *40075 / 360
 
 #include <array>
 #include <chrono>
