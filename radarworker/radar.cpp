@@ -297,13 +297,29 @@ void radar::Imagery::render_loop(int width, int height, std::vector<radar::Radar
         }
 
         std::sort(x_boundaries.begin(), x_boundaries.end());
+        // x_boundaries will ALWAYS have an even length, FYI
+        for (int i = 0; i < x_boundaries.size(); i += 2) {
+            int bound = x_boundaries.at(i);
+            int boundp = x_boundaries.at(i + 1);
+            int lower_bound = std::max(0, bound);
+            int upper_bound = std::min(roi_width, boundp);
 
-        mtx.lock();
-        for (auto n : x_boundaries) {
-            std::cout << n << " ";
+            if (lower_bound > roi_width || upper_bound < 0) {
+                continue;
+            }
+
+            mtx.lock();
+            cv::Mat image_roi_current = image_roi(cv::Rect(lower_bound, y, upper_bound - lower_bound, 1));
+            cv::Mat container_roi_current = container_roi(cv::Rect(lower_bound, y, upper_bound - lower_bound, 1));
+
+            image_roi_current.copyTo(container_roi_current);
+            mtx.unlock();
+            radar_used_atleast_once = true;
         }
-        std::cout << std::endl;
-        mtx.unlock();
+    }
+
+    if (radar_used_atleast_once) {
+        used_radars.push_back(&(radars[i]));
     }
 
     *is_done = true;
