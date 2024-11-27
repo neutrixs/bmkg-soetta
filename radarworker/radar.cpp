@@ -207,6 +207,10 @@ void radar::Imagery::render_loop(int width, int height, std::vector<radar::Radar
         current_priority = current_priority_pos->second;
     }
     mtx.unlock();
+    if (seconds_to_now > (declare_old_after_mins * 60)) {
+        current_priority = -1;
+    }
+
     PositionalData current_positional_data = {d, current_range, current_priority};
 
     for (int r_index = 0; r_index < radars.size(); r_index++) {
@@ -233,6 +237,11 @@ void radar::Imagery::render_loop(int width, int height, std::vector<radar::Radar
             indexed_priority = indexed_priority_pos->second;
         }
         mtx.unlock();
+
+        auto seconds_to_now = std::time(nullptr) - std::chrono::system_clock::to_time_t(indexed_radar.data.time.back());
+        if (seconds_to_now > (declare_old_after_mins * 60)) {
+            indexed_priority = -1;
+        }
 
         if (current_priority > indexed_priority) {
             continue;

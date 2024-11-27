@@ -24,7 +24,7 @@ static std::string write_info(radar::Imagery &imagery) {
     }
 
     for (auto &radar : imagery.used_radars) {
-        std::string name = radar->stasiun;
+        std::string name = radar->kode + " (" + radar->kota + ")";
         auto time = radar->data.time.back().time_since_epoch();
         long epoch = std::chrono::duration_cast<std::chrono::seconds>(time).count();
 
