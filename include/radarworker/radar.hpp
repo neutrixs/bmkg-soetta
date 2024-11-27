@@ -94,7 +94,7 @@ class Imagery {
     cv::Mat render(int width, int height);
 
     Imagery() {
-        radarRangeOverride = {{"PWK", 80.0 KM}, {"CGK", 90.0 KM}, {"JAK", 200.0 KM}};
+        radarRangeOverride = {{"PWK", 80.0 KM}, {"CGK", 85.0 KM}, {"JAK", 240.0 KM}};
         radarPriority = {{"PWK", 1}, {"CGK", 1}, {"JAK", 0}};
     }
 
